@@ -143,3 +143,22 @@ st.dataframe(df, use_container_width=True)
 # Descargar CSV
 if st.download_button("📥 Descargar reporte CSV", data=df.to_csv(index=False), file_name="reporte_inventario.csv"):
     st.success("Reporte generado con éxito.")
+
+# 📊 Seguimiento por producto o fecha
+st.markdown("<hr><h3>🔎 Seguimiento de Kardex</h3>", unsafe_allow_html=True)
+if os.path.exists(KARDEX_FILE):
+    kardex_df = pd.read_csv(KARDEX_FILE)
+    vista = st.radio("Filtrar por:", ["Producto", "Fecha"])
+
+    if vista == "Producto":
+        producto_sel = st.selectbox("Selecciona un producto:", kardex_df["Producto"].unique())
+        filtrado = kardex_df[kardex_df["Producto"] == producto_sel]
+        st.dataframe(filtrado.reset_index(drop=True), use_container_width=True)
+
+    if vista == "Fecha":
+        fecha_sel = st.date_input("Selecciona una fecha:", value=datetime.today())
+        fecha_str = fecha_sel.strftime("%Y-%m-%d")
+        filtrado = kardex_df[kardex_df["Fecha"] == fecha_str]
+        st.dataframe(filtrado.reset_index(drop=True), use_container_width=True)
+else:
+    st.info("Aún no hay movimientos registrados en el Kardex.")
