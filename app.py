@@ -37,7 +37,7 @@ RECETAS = {
 CSV_FILE = "inventario_actual.csv"
 KARDEX_FILE = "kardex.csv"
 HOY = datetime.today().strftime("%Y-%m-%d")
-HOY_MOSTRAR = datetime.today().strftime("%d/%m/%y")
+HOY_MOSTRAR = datetime.today().strftime("%d de %B de %Y")
 
 # Cargar estado previo si existe
 if os.path.exists(CSV_FILE):
