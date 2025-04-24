@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
 
 st.set_page_config(page_title="OlaCafe - Control de Inventario", layout="centered")
 
@@ -16,8 +15,13 @@ if "inventario" not in st.session_state:
     st.session_state.inventario = {p: 0 for p in PRODUCTOS}
     st.session_state.inicial = {p: 0 for p in PRODUCTOS}
     st.session_state.movimientos = []
+
+# Inicializar control de formularios
+if "show_inicial" not in st.session_state:
     st.session_state.show_inicial = True
+if "show_entradas" not in st.session_state:
     st.session_state.show_entradas = True
+if "show_salidas" not in st.session_state:
     st.session_state.show_salidas = True
 
 st.title("🥪 OlaCafe | Control de Inventario Diario")
