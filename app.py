@@ -41,27 +41,39 @@ HOY = datetime.today().strftime("%Y-%m-%d")
 HOY_MOSTRAR = datetime.today().strftime("%d %b %Y")
 ARCHIVO_INICIAL = f"inicial_{HOY}.csv"
 
-inventario_prev = {p: 0 for p in PRODUCTOS}
+# Cargar inventario actual
+inventario_actual = {p: 0 for p in PRODUCTOS}
 if os.path.exists(CSV_FILE):
-    df_prev = pd.read_csv(CSV_FILE)
-    if not df_prev.empty and "Cantidad Actual" in df_prev.columns:
-        inventario_prev = dict(zip(df_prev.Producto, df_prev["Cantidad Actual"]))
-elif os.path.exists(ARCHIVO_INICIAL):
-    df_inicial = pd.read_csv(ARCHIVO_INICIAL)
-    inventario_prev = dict(zip(df_inicial.Producto, df_inicial.Cantidad))
+    df_actual = pd.read_csv(CSV_FILE)
+    if not df_actual.empty and "Cantidad Actual" in df_actual.columns:
+        inventario_actual = dict(zip(df_actual.Producto, df_actual["Cantidad Actual"]))
 
+# Cargar inventario inicial
+inventario_inicial = {p: 0 for p in PRODUCTOS}
+if os.path.exists(ARCHIVO_INICIAL):
+    df_inicial = pd.read_csv(ARCHIVO_INICIAL)
+    if not df_inicial.empty:
+        inventario_inicial = dict(zip(df_inicial.Producto, df_inicial.Cantidad))
+
+# Cargar movimientos previos del día
 if os.path.exists(MOVIMIENTOS_FILE):
     df_movimientos = pd.read_csv(MOVIMIENTOS_FILE)
     movimientos_prev = [tuple(x) for x in df_movimientos[df_movimientos["Fecha"] == HOY][["Producto", "Movimiento", "Cantidad"]].values]
 else:
     movimientos_prev = []
 
+# Inicializar sesión
 if "inventario" not in st.session_state:
-    st.session_state.inventario = inventario_prev.copy()
-    st.session_state.inicial = inventario_prev.copy()
+    st.session_state.inventario = inventario_actual.copy()
+if "inicial" not in st.session_state:
+    st.session_state.inicial = inventario_inicial.copy()
+if "movimientos" not in st.session_state:
     st.session_state.movimientos = movimientos_prev.copy()
+if "show_inicial" not in st.session_state:
     st.session_state.show_inicial = True
+if "show_entradas" not in st.session_state:
     st.session_state.show_entradas = True
+if "show_salidas" not in st.session_state:
     st.session_state.show_salidas = True
 
 st.markdown(f"<div class='title-cafe'><h1>☕ OlaCafe | Control Diario</h1></div>", unsafe_allow_html=True)
@@ -82,6 +94,7 @@ def registrar_kardex(producto, movimiento, detalle, cantidad, existencia):
     else:
         nuevo.to_csv(KARDEX_FILE, index=False)
 
+# Inventario inicial
 if st.session_state.show_inicial:
     with st.expander("📥 Inventario inicial del día", expanded=False):
         with st.form("inventario_inicial_form"):
@@ -109,6 +122,7 @@ if st.session_state.show_inicial:
                 st.success("Inventario inicial registrado correctamente.")
                 st.session_state.show_inicial = False
 
+# Entradas
 if st.session_state.show_entradas:
     with st.expander("➕ Registrar Entradas", expanded=False):
         with st.form("entradas_form"):
@@ -127,6 +141,7 @@ if st.session_state.show_entradas:
                 st.success("Entradas registradas correctamente.")
                 st.session_state.show_entradas = False
 
+# Salidas
 if st.session_state.show_salidas:
     with st.expander("➖ Registrar Salidas", expanded=False):
         with st.form("salidas_form"):
@@ -155,6 +170,7 @@ if st.session_state.show_salidas:
                 st.success("Salidas registradas correctamente.")
                 st.session_state.show_salidas = False
 
+# Resumen
 inventario_actual = pd.DataFrame(list(st.session_state.inventario.items()), columns=["Producto", "Cantidad Actual"])
 inventario_actual.to_csv(CSV_FILE, index=False)
 
@@ -176,7 +192,7 @@ with st.expander("🧾 Ver todos los movimientos registrados"):
 if st.download_button("📥 Descargar reporte CSV", data=df.to_csv(index=False), file_name="reporte_inventario.csv"):
     st.success("Reporte generado con éxito.")
 
-# Borrar movimientos del día (protegido con clave)
+# Borrado protegido
 with st.expander("🗑️ Borrar datos del día"):
     clave = st.text_input("Ingrese clave de administrador para continuar:", type="password")
     if clave == "1001":
