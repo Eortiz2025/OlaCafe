@@ -29,8 +29,8 @@ st.markdown("""
 
 PRODUCTOS = ["Pan Hogaza", "Jamón Serrano", "Jamón de Pavo"]
 RECETAS = {
-    "Sándwich de Serrano": {"Pan Hogaza": 2, "Jamón Serrano": 1},
-    "Sándwich de Pavo": {"Pan Hogaza": 2, "Jamón de Pavo": 1},
+    "Sándwich de Serrano": {"Pan Hogaza": 2, "Jamón Serrano": 2},
+    "Sándwich de Pavo": {"Pan Hogaza": 2, "Jamón de Pavo": 2},
     "Toast": {"Pan Hogaza": 1},
 }
 
@@ -135,7 +135,7 @@ df = pd.DataFrame(columns=["Producto", "Inicial", "Entradas", "Salidas", "Final"
 for producto in PRODUCTOS:
     inicial = st.session_state.inicial.get(producto, 0)
     entradas = sum(m[2] for m in st.session_state.movimientos if m[0] == producto and m[1] == "Entrada")
-    salidas = sum(m[2] for m in st.session_state.movimientos if m[0] == producto and m[1].startswith("Salida"))
+    salidas = sum(m[2] for m in st.session_state.movimientos if m[0] == producto and "Salida" in m[1])
     final = st.session_state.inventario[producto]
     df.loc[len(df)] = [producto, inicial, entradas, salidas, final]
 
