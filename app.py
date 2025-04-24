@@ -55,7 +55,7 @@ if "inventario" not in st.session_state:
     st.session_state.show_entradas = True
     st.session_state.show_salidas = True
 
-st.markdown("""<div class='title-cafe'><h1>☕ OlaCafe | Control de Inventario Diario</h1></div>""", unsafe_allow_html=True)
+st.markdown("""<div class='title-cafe'><h1>☕ OlaCafe | Control Diario</h1></div>""", unsafe_allow_html=True)
 
 # Función para registrar en el Kardex
 def registrar_kardex(producto, movimiento, detalle, cantidad, existencia):
