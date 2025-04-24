@@ -35,25 +35,39 @@ with st.expander("📥 Inventario inicial del día", expanded=False):
                 st.session_state.movimientos.append((producto, "Inicial", cantidad))
             st.success("Inventario inicial registrado correctamente.")
 
-# Botón: Entradas
-if st.button("➕ Registrar Entradas"):
-    st.subheader("Entradas del Día")
-    for producto in PRODUCTOS:
-        cantidad = st.number_input(f"Entraron de {producto}", min_value=0, key=f"entrada_{producto}")
-        if cantidad > 0:
-            st.session_state.inventario[producto] += cantidad
-            st.session_state.movimientos.append((producto, "Entrada", cantidad))
+# Formulario: Entradas
+with st.expander("➕ Registrar Entradas", expanded=False):
+    with st.form("entradas_form"):
+        st.subheader("Entradas del Día")
+        entradas = {}
+        for producto in PRODUCTOS:
+            cantidad = st.number_input(f"Entraron de {producto}", min_value=0, key=f"entrada_{producto}")
+            entradas[producto] = cantidad
+        submitted = st.form_submit_button("Guardar Entradas")
+        if submitted:
+            for producto, cantidad in entradas.items():
+                if cantidad > 0:
+                    st.session_state.inventario[producto] += cantidad
+                    st.session_state.movimientos.append((producto, "Entrada", cantidad))
+            st.success("Entradas registradas correctamente.")
 
-# Botón: Salidas
-if st.button("➖ Registrar Salidas"):
-    st.subheader("Salidas por Ventas")
-    for nombre, receta in RECETAS.items():
-        cantidad = st.number_input(f"Vendidos: {nombre}", min_value=0, key=f"salida_{nombre}")
-        if cantidad > 0:
-            for producto, mult in receta.items():
-                total = cantidad * mult
-                st.session_state.inventario[producto] -= total
-                st.session_state.movimientos.append((producto, f"Salida ({nombre})", total))
+# Formulario: Salidas
+with st.expander("➖ Registrar Salidas", expanded=False):
+    with st.form("salidas_form"):
+        st.subheader("Salidas por Ventas")
+        salidas = {}
+        for nombre, receta in RECETAS.items():
+            cantidad = st.number_input(f"Vendidos: {nombre}", min_value=0, key=f"salida_{nombre}")
+            salidas[nombre] = cantidad
+        submitted = st.form_submit_button("Guardar Salidas")
+        if submitted:
+            for nombre, cantidad in salidas.items():
+                if cantidad > 0:
+                    for producto, mult in RECETAS[nombre].items():
+                        total = cantidad * mult
+                        st.session_state.inventario[producto] -= total
+                        st.session_state.movimientos.append((producto, f"Salida ({nombre})", total))
+            st.success("Salidas registradas correctamente.")
 
 # Botón: Ver inventario actual
 if st.button("📊 Dame el inventario actual"):
