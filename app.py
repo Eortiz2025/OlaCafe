@@ -1,6 +1,3 @@
-# Código completo restaurado a versión base sin validación de código
-# (idéntico a la versión antes de introducir la lógica de código de seguridad)
-
 import streamlit as st
 import pandas as pd
 import os
@@ -67,7 +64,7 @@ if "inventario" not in st.session_state:
     st.session_state.show_entradas = True
     st.session_state.show_salidas = True
 
-st.markdown(f"<div class='title-cafe'><h1>☕ OlaCafe | Control Diario</h1></div>", unsafe_allow_html=True)
+st.markdown("""<div class='title-cafe'><h1>☕ OlaCafe | Control Diario</h1></div>""", unsafe_allow_html=True)
 
 # Guardar movimiento
 def registrar_movimiento(producto, tipo, cantidad):
@@ -90,8 +87,19 @@ def registrar_kardex(producto, movimiento, detalle, cantidad, existencia):
 # Inventario inicial
 if st.session_state.show_inicial:
     with st.expander("📥 Inventario inicial del día", expanded=False):
-        with st.form("inventario_inicial_form"):
+        if os.path.exists(ARCHIVO_INICIAL):
+    st.info("⚠️ Ya existe un inventario inicial guardado hoy.")
+    codigo = st.text_input("Ingresa código de autorización para modificar:", type="password")
+    if codigo != "1001":
+        st.stop()
+
+with st.form("inventario_inicial_form"):
             st.subheader("Registrar inventario inicial")
+            if os.path.exists(ARCHIVO_INICIAL):
+                st.info("⚠️ Ya existe un inventario inicial guardado hoy.")
+                codigo = st.text_input("Ingresa código de autorización para modificar:", type="password")
+                if codigo != "1001":
+                    st.stop()
             iniciales = {}
             for producto in PRODUCTOS:
                 cantidad = st.number_input(f"{producto}", min_value=0, key=f"inicial_{producto}")
