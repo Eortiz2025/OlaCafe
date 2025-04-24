@@ -1,15 +1,13 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+import os
 
 st.set_page_config(page_title="OlaCafe - Control de Inventario", layout="centered")
 
+# Estilo visual mejorado
 st.markdown("""
     <style>
-    .main {
-        background-color: #fdf6f0;
-        color: #2e2e2e;
-    }
+    .main { background-color: #fdf6f0; color: #2e2e2e; }
     .stButton > button {
         background-color: #f77f00;
         color: white;
@@ -23,12 +21,8 @@ st.markdown("""
         font-weight: bold;
         border-radius: 8px;
     }
-    h1 {
-        color: #6f4e37;
-    }
-    .blue-subheader h3 {
-        color: #002c4c !important;
-    }
+    .title-cafe h1 { color: #6f4e37 !important; }
+    .title-azul h3 { color: #002c4c !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -39,16 +33,25 @@ RECETAS = {
     "Toast": {"Pan Hogaza": 1},
 }
 
+CSV_FILE = "inventario_actual.csv"
+
+# Cargar estado previo si existe
+if os.path.exists(CSV_FILE):
+    df_prev = pd.read_csv(CSV_FILE)
+    inventario_prev = dict(zip(df_prev.Producto, df_prev["Cantidad Actual"]))
+else:
+    inventario_prev = {p: 0 for p in PRODUCTOS}
+
 # Inicializar estado
 if "inventario" not in st.session_state:
-    st.session_state.inventario = {p: 0 for p in PRODUCTOS}
-    st.session_state.inicial = {p: 0 for p in PRODUCTOS}
+    st.session_state.inventario = inventario_prev.copy()
+    st.session_state.inicial = inventario_prev.copy()
     st.session_state.movimientos = []
     st.session_state.show_inicial = True
     st.session_state.show_entradas = True
     st.session_state.show_salidas = True
 
-st.markdown("""<h1>☕ OlaCafe | Control de Inventario Diario</h1>""", unsafe_allow_html=True)
+st.markdown("""<div class='title-cafe'><h1>☕ OlaCafe | Control de Inventario Diario</h1></div>""", unsafe_allow_html=True)
 
 # Formulario: Inventario inicial
 if st.session_state.show_inicial:
@@ -106,8 +109,12 @@ if st.session_state.show_salidas:
                 st.success("Salidas registradas correctamente.")
                 st.session_state.show_salidas = False
 
+# Guardar estado actual a CSV
+inventario_actual = pd.DataFrame(list(st.session_state.inventario.items()), columns=["Producto", "Cantidad Actual"])
+inventario_actual.to_csv(CSV_FILE, index=False)
+
 # Mostrar resumen final del día
-st.markdown("<div class='blue-subheader'><h3>📋 Resumen del Día</h3></div>", unsafe_allow_html=True)
+st.markdown("<div class='title-azul'><h3>📋 Resumen del Día</h3></div>", unsafe_allow_html=True)
 df = pd.DataFrame(columns=["Producto", "Inicial", "Entradas", "Salidas", "Final"])
 for producto in PRODUCTOS:
     inicial = st.session_state.inicial.get(producto, 0)
