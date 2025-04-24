@@ -94,26 +94,25 @@ if st.session_state.show_inicial:
             st.warning("✅ Código correcto. Puedes modificar el inventario inicial.")
         else:
             st.stop()
-    else:
-        with st.expander("📥 Inventario inicial del día", expanded=False):
-            with st.form("inventario_inicial_form"):
-                st.subheader("Registrar inventario inicial")
-                iniciales = {}
-                for producto in PRODUCTOS:
-                    cantidad = st.number_input(f"{producto}", min_value=0, key=f"inicial_{producto}")
-                    iniciales[producto] = cantidad
-                submitted = st.form_submit_button("✅ Guardar Inventario Inicial")
-                if submitted:
-                    df_inicial = []
-                    for producto, cantidad in iniciales.items():
-                        st.session_state.inventario[producto] = cantidad
-                        st.session_state.inicial[producto] = cantidad
-                        registrar_movimiento(producto, "Inicial", cantidad)
-                        registrar_kardex(producto, "Inicial", "Inventario del día", cantidad, cantidad)
-                        df_inicial.append([producto, cantidad])
-                    pd.DataFrame(df_inicial, columns=["Producto", "Cantidad"]).to_csv(ARCHIVO_INICIAL, index=False)
-                    st.success("Inventario inicial registrado correctamente.")
-                    st.session_state.show_inicial = False
+    with st.expander("📥 Inventario inicial del día", expanded=False):
+        with st.form("inventario_inicial_form"):
+            st.subheader("Registrar inventario inicial")
+            iniciales = {}
+            for producto in PRODUCTOS:
+                cantidad = st.number_input(f"{producto}", min_value=0, key=f"inicial_{producto}")
+                iniciales[producto] = cantidad
+            submitted = st.form_submit_button("✅ Guardar Inventario Inicial")
+            if submitted:
+                df_inicial = []
+                for producto, cantidad in iniciales.items():
+                    st.session_state.inventario[producto] = cantidad
+                    st.session_state.inicial[producto] = cantidad
+                    registrar_movimiento(producto, "Inicial", cantidad)
+                    registrar_kardex(producto, "Inicial", "Inventario del día", cantidad, cantidad)
+                    df_inicial.append([producto, cantidad])
+                pd.DataFrame(df_inicial, columns=["Producto", "Cantidad"]).to_csv(ARCHIVO_INICIAL, index=False)
+                st.success("Inventario inicial registrado correctamente.")
+                st.session_state.show_inicial = False
 
 # Entradas
 if st.session_state.show_entradas:
