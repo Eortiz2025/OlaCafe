@@ -35,29 +35,46 @@ RECETAS = {
 }
 
 CSV_FILE = "inventario_actual.csv"
+MOVIMIENTOS_FILE = "movimientos.csv"
 KARDEX_FILE = "kardex.csv"
 HOY = datetime.today().strftime("%Y-%m-%d")
 HOY_MOSTRAR = datetime.today().strftime("%d %b %Y")
 
-# Cargar estado previo si existe
+# Cargar inventario actual
 if os.path.exists(CSV_FILE):
     df_prev = pd.read_csv(CSV_FILE)
     inventario_prev = dict(zip(df_prev.Producto, df_prev["Cantidad Actual"]))
 else:
     inventario_prev = {p: 0 for p in PRODUCTOS}
 
+# Cargar movimientos del día si existen
+if os.path.exists(MOVIMIENTOS_FILE):
+    df_movimientos = pd.read_csv(MOVIMIENTOS_FILE)
+    movimientos_prev = [tuple(x) for x in df_movimientos[df_movimientos["Fecha"] == HOY][["Producto", "Movimiento", "Cantidad"]].values]
+else:
+    movimientos_prev = []
+
 # Inicializar estado
 if "inventario" not in st.session_state:
     st.session_state.inventario = inventario_prev.copy()
     st.session_state.inicial = inventario_prev.copy()
-    st.session_state.movimientos = []
+    st.session_state.movimientos = movimientos_prev.copy()
     st.session_state.show_inicial = True
     st.session_state.show_entradas = True
     st.session_state.show_salidas = True
 
 st.markdown("""<div class='title-cafe'><h1>☕ OlaCafe | Control Diario</h1></div>""", unsafe_allow_html=True)
 
-# Función para registrar en el Kardex
+# Guardar movimiento
+def registrar_movimiento(producto, tipo, cantidad):
+    st.session_state.movimientos.append((producto, tipo, cantidad))
+    fila = pd.DataFrame([[HOY, producto, tipo, cantidad]], columns=["Fecha", "Producto", "Movimiento", "Cantidad"])
+    if os.path.exists(MOVIMIENTOS_FILE):
+        fila.to_csv(MOVIMIENTOS_FILE, mode="a", header=False, index=False)
+    else:
+        fila.to_csv(MOVIMIENTOS_FILE, index=False)
+
+# Guardar Kardex
 def registrar_kardex(producto, movimiento, detalle, cantidad, existencia):
     nuevo = pd.DataFrame([[HOY, producto, movimiento, detalle, cantidad, existencia]],
                          columns=["Fecha", "Producto", "Movimiento", "Detalle", "Cantidad", "Existencia"])
@@ -66,7 +83,7 @@ def registrar_kardex(producto, movimiento, detalle, cantidad, existencia):
     else:
         nuevo.to_csv(KARDEX_FILE, index=False)
 
-# Formulario: Inventario inicial
+# Inventario inicial
 if st.session_state.show_inicial:
     with st.expander("📥 Inventario inicial del día", expanded=False):
         with st.form("inventario_inicial_form"):
@@ -80,12 +97,12 @@ if st.session_state.show_inicial:
                 for producto, cantidad in iniciales.items():
                     st.session_state.inventario[producto] = cantidad
                     st.session_state.inicial[producto] = cantidad
-                    st.session_state.movimientos.append((producto, "Inicial", cantidad))
+                    registrar_movimiento(producto, "Inicial", cantidad)
                     registrar_kardex(producto, "Inicial", "Inventario del día", cantidad, cantidad)
                 st.success("Inventario inicial registrado correctamente.")
                 st.session_state.show_inicial = False
 
-# Formulario: Entradas
+# Entradas
 if st.session_state.show_entradas:
     with st.expander("➕ Registrar Entradas", expanded=False):
         with st.form("entradas_form"):
@@ -99,12 +116,12 @@ if st.session_state.show_entradas:
                 for producto, cantidad in entradas.items():
                     if cantidad > 0:
                         st.session_state.inventario[producto] += cantidad
-                        st.session_state.movimientos.append((producto, "Entrada", cantidad))
+                        registrar_movimiento(producto, "Entrada", cantidad)
                         registrar_kardex(producto, "Entrada", "Reposición", cantidad, st.session_state.inventario[producto])
                 st.success("Entradas registradas correctamente.")
                 st.session_state.show_entradas = False
 
-# Formulario: Salidas
+# Salidas
 if st.session_state.show_salidas:
     with st.expander("➖ Registrar Salidas", expanded=False):
         with st.form("salidas_form"):
@@ -120,28 +137,28 @@ if st.session_state.show_salidas:
                         for producto, mult in RECETAS[nombre].items():
                             total = cantidad * mult
                             st.session_state.inventario[producto] -= total
-                            st.session_state.movimientos.append((producto, f"Salida - {nombre}", total))
-                            registrar_kardex(producto, "Salida", f"{nombre}", total, st.session_state.inventario[producto])
+                            registrar_movimiento(producto, f"Salida - {nombre}", total)
+                            registrar_kardex(producto, "Salida", nombre, total, st.session_state.inventario[producto])
                 st.success("Salidas registradas correctamente.")
                 st.session_state.show_salidas = False
 
-# Guardar estado actual a CSV
+# Guardar inventario
 inventario_actual = pd.DataFrame(list(st.session_state.inventario.items()), columns=["Producto", "Cantidad Actual"])
 inventario_actual.to_csv(CSV_FILE, index=False)
 
-# Mostrar resumen final del día
+# Resumen
 st.markdown(f"<div class='title-azul'><h3>📋 Resumen del Día - {HOY_MOSTRAR}</h3></div>", unsafe_allow_html=True)
 df = pd.DataFrame(columns=["Producto", "Inicial", "Entradas", "Salidas", "Final"])
 for producto in PRODUCTOS:
     inicial = st.session_state.inicial.get(producto, 0)
-    entradas = sum(m[2] for m in st.session_state.movimientos if m[0] == producto and m[1] == "Entrada")
-    salidas = sum(m[2] for m in st.session_state.movimientos if m[0] == producto and m[1].startswith("Salida"))
+    entradas = sum(int(m[2]) for m in st.session_state.movimientos if m[0] == producto and m[1] == "Entrada")
+    salidas = sum(int(m[2]) for m in st.session_state.movimientos if m[0] == producto and m[1].startswith("Salida"))
     final = st.session_state.inventario[producto]
     df.loc[len(df)] = [producto, inicial, entradas, salidas, final]
 
 st.dataframe(df, use_container_width=True)
 
-# Mostrar movimientos para verificación
+# Ver movimientos
 df_mov = pd.DataFrame(st.session_state.movimientos, columns=["Producto", "Movimiento", "Cantidad"])
 with st.expander("🧾 Ver todos los movimientos registrados"):
     st.dataframe(df_mov, use_container_width=True)
