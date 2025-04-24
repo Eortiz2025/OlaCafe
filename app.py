@@ -84,16 +84,8 @@ def registrar_kardex(producto, movimiento, detalle, cantidad, existencia):
     else:
         nuevo.to_csv(KARDEX_FILE, index=False)
 
-# Inventario inicial (solo si no existe el archivo)
+# Inventario inicial
 if st.session_state.show_inicial:
-    if os.path.exists(ARCHIVO_INICIAL):
-        st.info("⚠️ El inventario inicial ya fue capturado hoy.")
-        codigo = st.text_input("Ingresa código de autorización para modificar:", type="password")
-        if codigo == "1001":
-            st.session_state.show_inicial = True
-            st.warning("✅ Código correcto. Puedes modificar el inventario inicial.")
-        else:
-            st.stop()
     with st.expander("📥 Inventario inicial del día", expanded=False):
         with st.form("inventario_inicial_form"):
             st.subheader("Registrar inventario inicial")
