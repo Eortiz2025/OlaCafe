@@ -170,20 +170,24 @@ with st.expander("🧾 Ver todos los movimientos registrados"):
 if st.download_button("📥 Descargar reporte CSV", data=df.to_csv(index=False), file_name="reporte_inventario.csv"):
     st.success("Reporte generado con éxito.")
 
-# Borrar movimientos del día
+# Borrar movimientos del día (protegido con clave)
 with st.expander("🗑️ Borrar datos del día"):
-    borrar = st.date_input("Seleccionar fecha a borrar", value=datetime.today())
-    fecha_str = borrar.strftime("%Y-%m-%d")
-    if st.button("🚨 Borrar inventario inicial, entradas, salidas y movimientos de ese día"):
-        if os.path.exists(MOVIMIENTOS_FILE):
-            df_mov = pd.read_csv(MOVIMIENTOS_FILE)
-            df_mov = df_mov[df_mov["Fecha"] != fecha_str]
-            df_mov.to_csv(MOVIMIENTOS_FILE, index=False)
-        if os.path.exists(KARDEX_FILE):
-            df_kardex = pd.read_csv(KARDEX_FILE)
-            df_kardex = df_kardex[df_kardex["Fecha"] != fecha_str]
-            df_kardex.to_csv(KARDEX_FILE, index=False)
-        archivo_inicial = f"inicial_{fecha_str}.csv"
-        if os.path.exists(archivo_inicial):
-            os.remove(archivo_inicial)
-        st.success(f"Datos del día {fecha_str} borrados correctamente.")
+    clave = st.text_input("Ingrese clave de administrador para continuar:", type="password")
+    if clave == "1001":
+        borrar = st.date_input("Seleccionar fecha a borrar", value=datetime.today())
+        fecha_str = borrar.strftime("%Y-%m-%d")
+        if st.button("🚨 Borrar inventario inicial, entradas, salidas y movimientos de ese día"):
+            if os.path.exists(MOVIMIENTOS_FILE):
+                df_mov = pd.read_csv(MOVIMIENTOS_FILE)
+                df_mov = df_mov[df_mov["Fecha"] != fecha_str]
+                df_mov.to_csv(MOVIMIENTOS_FILE, index=False)
+            if os.path.exists(KARDEX_FILE):
+                df_kardex = pd.read_csv(KARDEX_FILE)
+                df_kardex = df_kardex[df_kardex["Fecha"] != fecha_str]
+                df_kardex.to_csv(KARDEX_FILE, index=False)
+            archivo_inicial = f"inicial_{fecha_str}.csv"
+            if os.path.exists(archivo_inicial):
+                os.remove(archivo_inicial)
+            st.success(f"Datos del día {fecha_str} borrados correctamente.")
+    elif clave != "":
+        st.error("Clave incorrecta. No tienes permiso para borrar datos.")
