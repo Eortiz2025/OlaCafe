@@ -46,9 +46,9 @@ if os.path.exists(CSV_FILE):
     df_prev = pd.read_csv(CSV_FILE)
     if not df_prev.empty and "Cantidad Actual" in df_prev.columns:
         inventario_prev = dict(zip(df_prev.Producto, df_prev["Cantidad Actual"]))
-    elif os.path.exists(ARCHIVO_INICIAL):
-        df_inicial = pd.read_csv(ARCHIVO_INICIAL)
-        inventario_prev = dict(zip(df_inicial.Producto, df_inicial.Cantidad))
+elif os.path.exists(ARCHIVO_INICIAL):
+    df_inicial = pd.read_csv(ARCHIVO_INICIAL)
+    inventario_prev = dict(zip(df_inicial.Producto, df_inicial.Cantidad))
 
 if os.path.exists(MOVIMIENTOS_FILE):
     df_movimientos = pd.read_csv(MOVIMIENTOS_FILE)
