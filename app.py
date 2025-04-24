@@ -64,7 +64,7 @@ if "inventario" not in st.session_state:
     st.session_state.show_entradas = True
     st.session_state.show_salidas = True
 
-st.markdown("""<div class='title-cafe'><h1>☕ OlaCafe | Control Diario</h1></div>""", unsafe_allow_html=True)
+st.markdown(f"<div class='title-cafe'><h1>☕ OlaCafe | Control Diario</h1></div>", unsafe_allow_html=True)
 
 # Guardar movimiento
 def registrar_movimiento(producto, tipo, cantidad):
@@ -92,6 +92,7 @@ if st.session_state.show_inicial:
             codigo = st.text_input("Ingresa código de autorización para modificar:", type="password")
             if codigo != "1001":
                 st.stop()
+
         with st.form("inventario_inicial_form"):
             st.subheader("Registrar inventario inicial")
             iniciales = {}
