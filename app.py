@@ -3,6 +3,11 @@ import pandas as pd
 import os
 from datetime import datetime
 
+# 🧹 Limpieza temporal de pruebas (solo una vez)
+for f in ["inventario_actual.csv", "movimientos.csv", "kardex.csv", f"inicial_{datetime.today().strftime('%Y-%m-%d')}.csv"]:
+    if os.path.exists(f):
+        os.remove(f)
+
 st.set_page_config(page_title="OlaCafe - Control de Inventario", layout="centered")
 
 # Estilo visual mejorado
