@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
+from datetime import datetime
 
 st.set_page_config(page_title="OlaCafe - Control de Inventario", layout="centered")
 
@@ -34,6 +35,8 @@ RECETAS = {
 }
 
 CSV_FILE = "inventario_actual.csv"
+KARDEX_FILE = "kardex.csv"
+HOY = datetime.today().strftime("%Y-%m-%d")
 
 # Cargar estado previo si existe
 if os.path.exists(CSV_FILE):
@@ -53,6 +56,15 @@ if "inventario" not in st.session_state:
 
 st.markdown("""<div class='title-cafe'><h1>☕ OlaCafe | Control de Inventario Diario</h1></div>""", unsafe_allow_html=True)
 
+# Función para registrar en el Kardex
+def registrar_kardex(producto, movimiento, detalle, cantidad, existencia):
+    nuevo = pd.DataFrame([[HOY, producto, movimiento, detalle, cantidad, existencia]],
+                         columns=["Fecha", "Producto", "Movimiento", "Detalle", "Cantidad", "Existencia"])
+    if os.path.exists(KARDEX_FILE):
+        nuevo.to_csv(KARDEX_FILE, mode="a", header=False, index=False)
+    else:
+        nuevo.to_csv(KARDEX_FILE, index=False)
+
 # Formulario: Inventario inicial
 if st.session_state.show_inicial:
     with st.expander("📥 Inventario inicial del día", expanded=False):
@@ -68,6 +80,7 @@ if st.session_state.show_inicial:
                     st.session_state.inventario[producto] = cantidad
                     st.session_state.inicial[producto] = cantidad
                     st.session_state.movimientos.append((producto, "Inicial", cantidad))
+                    registrar_kardex(producto, "Inicial", "Inventario del día", cantidad, cantidad)
                 st.success("Inventario inicial registrado correctamente.")
                 st.session_state.show_inicial = False
 
@@ -86,6 +99,7 @@ if st.session_state.show_entradas:
                     if cantidad > 0:
                         st.session_state.inventario[producto] += cantidad
                         st.session_state.movimientos.append((producto, "Entrada", cantidad))
+                        registrar_kardex(producto, "Entrada", "Reposición", cantidad, st.session_state.inventario[producto])
                 st.success("Entradas registradas correctamente.")
                 st.session_state.show_entradas = False
 
@@ -106,6 +120,7 @@ if st.session_state.show_salidas:
                             total = cantidad * mult
                             st.session_state.inventario[producto] -= total
                             st.session_state.movimientos.append((producto, f"Salida ({nombre})", total))
+                            registrar_kardex(producto, "Salida", f"{nombre}", total, st.session_state.inventario[producto])
                 st.success("Salidas registradas correctamente.")
                 st.session_state.show_salidas = False
 
