@@ -64,7 +64,7 @@ if "inventario" not in st.session_state:
     st.session_state.show_entradas = True
     st.session_state.show_salidas = True
 
-st.markdown(f"<div class='title-cafe'><h1>\u2615 OlaCafe | Control Diario</h1></div>", unsafe_allow_html=True)
+st.markdown(f"<div class='title-cafe'><h1>☕ OlaCafe | Control Diario</h1></div>", unsafe_allow_html=True)
 
 def registrar_movimiento(producto, tipo, cantidad):
     st.session_state.movimientos.append((producto, tipo, cantidad))
@@ -83,7 +83,7 @@ def registrar_kardex(producto, movimiento, detalle, cantidad, existencia):
         nuevo.to_csv(KARDEX_FILE, index=False)
 
 if st.session_state.show_inicial:
-    with st.expander("\ud83d\udce5 Inventario inicial del d\u00eda", expanded=False):
+    with st.expander("📥 Inventario inicial del día", expanded=False):
         with st.form("inventario_inicial_form"):
             st.subheader("Registrar inventario inicial")
             iniciales = {}
@@ -93,49 +93,49 @@ if st.session_state.show_inicial:
                 cantidad = st.number_input(f"{producto}", min_value=0, key=f"inicial_{producto}", disabled=inventario_existente)
                 iniciales[producto] = cantidad
 
-            submitted = st.form_submit_button("\u2705 Guardar Inventario Inicial", disabled=inventario_existente)
+            submitted = st.form_submit_button("✅ Guardar Inventario Inicial", disabled=inventario_existente)
 
             if inventario_existente:
-                st.info("\u2705 El inventario inicial del d\u00eda ya fue capturado.")
+                st.info("✅ El inventario inicial del día ya fue capturado.")
             elif submitted:
                 df_inicial = []
                 for producto, cantidad in iniciales.items():
                     st.session_state.inventario[producto] = cantidad
                     st.session_state.inicial[producto] = cantidad
                     registrar_movimiento(producto, "Inicial", cantidad)
-                    registrar_kardex(producto, "Inicial", "Inventario del d\u00eda", cantidad, cantidad)
+                    registrar_kardex(producto, "Inicial", "Inventario del día", cantidad, cantidad)
                     df_inicial.append([producto, cantidad])
                 pd.DataFrame(df_inicial, columns=["Producto", "Cantidad"]).to_csv(ARCHIVO_INICIAL, index=False)
                 st.success("Inventario inicial registrado correctamente.")
                 st.session_state.show_inicial = False
 
 if st.session_state.show_entradas:
-    with st.expander("\u2795 Registrar Entradas", expanded=False):
+    with st.expander("➕ Registrar Entradas", expanded=False):
         with st.form("entradas_form"):
-            st.subheader("Entradas del D\u00eda")
+            st.subheader("Entradas del Día")
             entradas = {}
             for producto in PRODUCTOS:
                 cantidad = st.number_input(f"Entraron de {producto}", min_value=0, key=f"entrada_{producto}")
                 entradas[producto] = cantidad
-            submitted = st.form_submit_button("\u2705 Guardar Entradas")
+            submitted = st.form_submit_button("✅ Guardar Entradas")
             if submitted:
                 for producto, cantidad in entradas.items():
                     if cantidad > 0:
                         st.session_state.inventario[producto] += cantidad
                         registrar_movimiento(producto, "Entrada", cantidad)
-                        registrar_kardex(producto, "Entrada", "Reposici\u00f3n", cantidad, st.session_state.inventario[producto])
+                        registrar_kardex(producto, "Entrada", "Reposición", cantidad, st.session_state.inventario[producto])
                 st.success("Entradas registradas correctamente.")
                 st.session_state.show_entradas = False
 
 if st.session_state.show_salidas:
-    with st.expander("\u2796 Registrar Salidas", expanded=False):
+    with st.expander("➖ Registrar Salidas", expanded=False):
         with st.form("salidas_form"):
             st.subheader("Salidas por Ventas")
             salidas = {}
             for nombre, receta in RECETAS.items():
                 cantidad = st.number_input(f"Vendidos: {nombre}", min_value=0, key=f"salida_{nombre}")
                 salidas[nombre] = cantidad
-            submitted = st.form_submit_button("\u2705 Guardar Salidas")
+            submitted = st.form_submit_button("✅ Guardar Salidas")
             if submitted:
                 for nombre, cantidad in salidas.items():
                     if cantidad > 0:
@@ -158,7 +158,7 @@ if st.session_state.show_salidas:
 inventario_actual = pd.DataFrame(list(st.session_state.inventario.items()), columns=["Producto", "Cantidad Actual"])
 inventario_actual.to_csv(CSV_FILE, index=False)
 
-st.markdown(f"<div class='title-azul'><h3>\ud83d\udccb Resumen del D\u00eda - {HOY_MOSTRAR}</h3></div>", unsafe_allow_html=True)
+st.markdown(f"<div class='title-azul'><h3>📋 Resumen del Día - {HOY_MOSTRAR}</h3></div>", unsafe_allow_html=True)
 df = pd.DataFrame(columns=["Producto", "Inicial", "Entradas", "Salidas", "Final"])
 for producto in PRODUCTOS:
     inicial = st.session_state.inicial.get(producto, 0)
@@ -170,19 +170,19 @@ for producto in PRODUCTOS:
 st.dataframe(df, use_container_width=True)
 
 df_mov = pd.DataFrame(st.session_state.movimientos, columns=["Producto", "Movimiento", "Cantidad"])
-with st.expander("\ud83d\uddfe\ufe0f Ver todos los movimientos registrados"):
+with st.expander("🧾 Ver todos los movimientos registrados"):
     st.dataframe(df_mov, use_container_width=True)
 
-if st.download_button("\ud83d\udcc5 Descargar reporte CSV", data=df.to_csv(index=False), file_name="reporte_inventario.csv"):
-    st.success("Reporte generado con \u00e9xito.")
+if st.download_button("📥 Descargar reporte CSV", data=df.to_csv(index=False), file_name="reporte_inventario.csv"):
+    st.success("Reporte generado con éxito.")
 
-# Borrar movimientos del d\u00eda (protegido con clave)
-with st.expander("\ud83d\uddd1\ufe0f Borrar datos del d\u00eda"):
+# Borrar movimientos del día (protegido con clave)
+with st.expander("🗑️ Borrar datos del día"):
     clave = st.text_input("Ingrese clave de administrador para continuar:", type="password")
     if clave == "1001":
         borrar = st.date_input("Seleccionar fecha a borrar", value=datetime.today())
         fecha_str = borrar.strftime("%Y-%m-%d")
-        if st.button("\ud83d\udea8 Borrar inventario inicial, entradas, salidas y movimientos de ese d\u00eda"):
+        if st.button("🚨 Borrar inventario inicial, entradas, salidas y movimientos de ese día"):
             if os.path.exists(MOVIMIENTOS_FILE):
                 df_mov = pd.read_csv(MOVIMIENTOS_FILE)
                 df_mov = df_mov[df_mov["Fecha"] != fecha_str]
@@ -198,6 +198,6 @@ with st.expander("\ud83d\uddd1\ufe0f Borrar datos del d\u00eda"):
                 for key in ["inventario", "inicial", "movimientos"]:
                     st.session_state[key] = {p: 0 for p in PRODUCTOS} if key != "movimientos" else []
                 pd.DataFrame(PRODUCTOS, columns=["Producto"]).assign(**{"Cantidad Actual": 0}).to_csv(CSV_FILE, index=False)
-            st.success(f"Datos del d\u00eda {fecha_str} borrados correctamente.")
+            st.success(f"Datos del día {fecha_str} borrados correctamente.")
     elif clave != "":
         st.error("Clave incorrecta. No tienes permiso para borrar datos.")
