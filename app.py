@@ -120,7 +120,7 @@ if st.session_state.show_salidas:
                         for producto, mult in RECETAS[nombre].items():
                             total = cantidad * mult
                             st.session_state.inventario[producto] -= total
-                            st.session_state.movimientos.append((producto, f"Salida ({nombre})", total))
+                            st.session_state.movimientos.append((producto, f"Salida - {nombre}", total))
                             registrar_kardex(producto, "Salida", f"{nombre}", total, st.session_state.inventario[producto])
                 st.success("Salidas registradas correctamente.")
                 st.session_state.show_salidas = False
@@ -135,16 +135,16 @@ df = pd.DataFrame(columns=["Producto", "Inicial", "Entradas", "Salidas", "Final"
 for producto in PRODUCTOS:
     inicial = st.session_state.inicial.get(producto, 0)
     entradas = sum(m[2] for m in st.session_state.movimientos if m[0] == producto and m[1] == "Entrada")
-    salidas = sum(m[2] for m in st.session_state.movimientos if m[0] == producto and "Salida" in m[1])
+    salidas = sum(m[2] for m in st.session_state.movimientos if m[0] == producto and m[1].startswith("Salida"))
     final = st.session_state.inventario[producto]
     df.loc[len(df)] = [producto, inicial, entradas, salidas, final]
 
 st.dataframe(df, use_container_width=True)
 
-# Mostrar todos los movimientos para depuración
+# Mostrar movimientos para verificación
 df_mov = pd.DataFrame(st.session_state.movimientos, columns=["Producto", "Movimiento", "Cantidad"])
-st.markdown("### 🔍 Movimientos registrados (debug)")
-st.dataframe(df_mov, use_container_width=True)
+with st.expander("🧾 Ver todos los movimientos registrados"):
+    st.dataframe(df_mov, use_container_width=True)
 
 # Descargar CSV
 if st.download_button("📥 Descargar reporte CSV", data=df.to_csv(index=False), file_name="reporte_inventario.csv"):
