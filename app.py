@@ -188,6 +188,10 @@ with st.expander("🗑️ Borrar datos del día"):
             archivo_inicial = f"inicial_{fecha_str}.csv"
             if os.path.exists(archivo_inicial):
                 os.remove(archivo_inicial)
+            if fecha_str == HOY:
+                for key in ["inventario", "inicial", "movimientos"]:
+                    st.session_state[key] = {p: 0 for p in PRODUCTOS} if key != "movimientos" else []
+                pd.DataFrame(PRODUCTOS, columns=["Producto"]).assign(**{"Cantidad Actual": 0}).to_csv(CSV_FILE, index=False)
             st.success(f"Datos del día {fecha_str} borrados correctamente.")
     elif clave != "":
         st.error("Clave incorrecta. No tienes permiso para borrar datos.")
