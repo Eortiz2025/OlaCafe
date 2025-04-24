@@ -19,14 +19,21 @@ if "inventario" not in st.session_state:
 
 st.title("🥪 OlaCafe | Control de Inventario Diario")
 
-# Botón: Inventario inicial
-if st.button("📥 Inventario inicial del día"):
-    st.subheader("Inventario Inicial")
-    for producto in PRODUCTOS:
-        cantidad = st.number_input(f"{producto}", min_value=0, key=f"inicial_{producto}")
-        st.session_state.inventario[producto] = cantidad
-        st.session_state.inicial[producto] = cantidad
-        st.session_state.movimientos.append((producto, "Inicial", cantidad))
+# Formulario: Inventario inicial
+with st.expander("📥 Inventario inicial del día", expanded=False):
+    with st.form("inventario_inicial_form"):
+        st.subheader("Registrar inventario inicial")
+        iniciales = {}
+        for producto in PRODUCTOS:
+            cantidad = st.number_input(f"{producto}", min_value=0, key=f"inicial_{producto}")
+            iniciales[producto] = cantidad
+        submitted = st.form_submit_button("Guardar Inventario Inicial")
+        if submitted:
+            for producto, cantidad in iniciales.items():
+                st.session_state.inventario[producto] = cantidad
+                st.session_state.inicial[producto] = cantidad
+                st.session_state.movimientos.append((producto, "Inicial", cantidad))
+            st.success("Inventario inicial registrado correctamente.")
 
 # Botón: Entradas
 if st.button("➕ Registrar Entradas"):
