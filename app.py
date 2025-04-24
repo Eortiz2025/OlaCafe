@@ -141,6 +141,11 @@ for producto in PRODUCTOS:
 
 st.dataframe(df, use_container_width=True)
 
+# Mostrar todos los movimientos para depuración
+df_mov = pd.DataFrame(st.session_state.movimientos, columns=["Producto", "Movimiento", "Cantidad"])
+st.markdown("### 🔍 Movimientos registrados (debug)")
+st.dataframe(df_mov, use_container_width=True)
+
 # Descargar CSV
 if st.download_button("📥 Descargar reporte CSV", data=df.to_csv(index=False), file_name="reporte_inventario.csv"):
     st.success("Reporte generado con éxito.")
