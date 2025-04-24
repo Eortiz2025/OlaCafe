@@ -1,7 +1,31 @@
 import streamlit as st
 import pandas as pd
+import os
+from datetime import datetime
 
 st.set_page_config(page_title="OlaCafe - Control de Inventario", layout="centered")
+
+# Estilo visual mejorado
+st.markdown("""
+    <style>
+    .main { background-color: #fdf6f0; color: #2e2e2e; }
+    .stButton > button {
+        background-color: #f77f00;
+        color: white;
+        font-weight: bold;
+        border-radius: 8px;
+        padding: 0.5em 1em;
+    }
+    .stDownloadButton > button {
+        background-color: #007f5f;
+        color: white;
+        font-weight: bold;
+        border-radius: 8px;
+    }
+    .title-cafe h1 { color: #6f4e37 !important; }
+    .title-azul h3 { color: #002c4c !important; }
+    </style>
+""", unsafe_allow_html=True)
 
 PRODUCTOS = ["Pan Hogaza", "Jamón Serrano", "Jamón de Pavo"]
 RECETAS = {
@@ -10,21 +34,36 @@ RECETAS = {
     "Toast": {"Pan Hogaza": 1},
 }
 
+CSV_FILE = "inventario_actual.csv"
+KARDEX_FILE = "kardex.csv"
+HOY = datetime.today().strftime("%Y-%m-%d")
+
+# Cargar estado previo si existe
+if os.path.exists(CSV_FILE):
+    df_prev = pd.read_csv(CSV_FILE)
+    inventario_prev = dict(zip(df_prev.Producto, df_prev["Cantidad Actual"]))
+else:
+    inventario_prev = {p: 0 for p in PRODUCTOS}
+
 # Inicializar estado
 if "inventario" not in st.session_state:
-    st.session_state.inventario = {p: 0 for p in PRODUCTOS}
-    st.session_state.inicial = {p: 0 for p in PRODUCTOS}
+    st.session_state.inventario = inventario_prev.copy()
+    st.session_state.inicial = inventario_prev.copy()
     st.session_state.movimientos = []
-
-# Inicializar control de formularios
-if "show_inicial" not in st.session_state:
     st.session_state.show_inicial = True
-if "show_entradas" not in st.session_state:
     st.session_state.show_entradas = True
-if "show_salidas" not in st.session_state:
     st.session_state.show_salidas = True
 
-st.title("🥪 OlaCafe | Control de Inventario Diario")
+st.markdown("""<div class='title-cafe'><h1>☕ OlaCafe | Control de Inventario Diario</h1></div>""", unsafe_allow_html=True)
+
+# Función para registrar en el Kardex
+def registrar_kardex(producto, movimiento, detalle, cantidad, existencia):
+    nuevo = pd.DataFrame([[HOY, producto, movimiento, detalle, cantidad, existencia]],
+                         columns=["Fecha", "Producto", "Movimiento", "Detalle", "Cantidad", "Existencia"])
+    if os.path.exists(KARDEX_FILE):
+        nuevo.to_csv(KARDEX_FILE, mode="a", header=False, index=False)
+    else:
+        nuevo.to_csv(KARDEX_FILE, index=False)
 
 # Formulario: Inventario inicial
 if st.session_state.show_inicial:
@@ -35,12 +74,13 @@ if st.session_state.show_inicial:
             for producto in PRODUCTOS:
                 cantidad = st.number_input(f"{producto}", min_value=0, key=f"inicial_{producto}")
                 iniciales[producto] = cantidad
-            submitted = st.form_submit_button("Guardar Inventario Inicial")
+            submitted = st.form_submit_button("✅ Guardar Inventario Inicial")
             if submitted:
                 for producto, cantidad in iniciales.items():
                     st.session_state.inventario[producto] = cantidad
                     st.session_state.inicial[producto] = cantidad
                     st.session_state.movimientos.append((producto, "Inicial", cantidad))
+                    registrar_kardex(producto, "Inicial", "Inventario del día", cantidad, cantidad)
                 st.success("Inventario inicial registrado correctamente.")
                 st.session_state.show_inicial = False
 
@@ -53,12 +93,13 @@ if st.session_state.show_entradas:
             for producto in PRODUCTOS:
                 cantidad = st.number_input(f"Entraron de {producto}", min_value=0, key=f"entrada_{producto}")
                 entradas[producto] = cantidad
-            submitted = st.form_submit_button("Guardar Entradas")
+            submitted = st.form_submit_button("✅ Guardar Entradas")
             if submitted:
                 for producto, cantidad in entradas.items():
                     if cantidad > 0:
                         st.session_state.inventario[producto] += cantidad
                         st.session_state.movimientos.append((producto, "Entrada", cantidad))
+                        registrar_kardex(producto, "Entrada", "Reposición", cantidad, st.session_state.inventario[producto])
                 st.success("Entradas registradas correctamente.")
                 st.session_state.show_entradas = False
 
@@ -71,7 +112,7 @@ if st.session_state.show_salidas:
             for nombre, receta in RECETAS.items():
                 cantidad = st.number_input(f"Vendidos: {nombre}", min_value=0, key=f"salida_{nombre}")
                 salidas[nombre] = cantidad
-            submitted = st.form_submit_button("Guardar Salidas")
+            submitted = st.form_submit_button("✅ Guardar Salidas")
             if submitted:
                 for nombre, cantidad in salidas.items():
                     if cantidad > 0:
@@ -79,17 +120,16 @@ if st.session_state.show_salidas:
                             total = cantidad * mult
                             st.session_state.inventario[producto] -= total
                             st.session_state.movimientos.append((producto, f"Salida ({nombre})", total))
+                            registrar_kardex(producto, "Salida", f"{nombre}", total, st.session_state.inventario[producto])
                 st.success("Salidas registradas correctamente.")
                 st.session_state.show_salidas = False
 
-# Botón: Ver inventario actual
-if st.button("📊 Dame el inventario actual"):
-    st.write("### Inventario Actual")
-    df_inv = pd.DataFrame(list(st.session_state.inventario.items()), columns=["Producto", "Cantidad Actual"])
-    st.table(df_inv)
+# Guardar estado actual a CSV
+inventario_actual = pd.DataFrame(list(st.session_state.inventario.items()), columns=["Producto", "Cantidad Actual"])
+inventario_actual.to_csv(CSV_FILE, index=False)
 
 # Mostrar resumen final del día
-st.subheader("📋 Resumen del Día")
+st.markdown("<div class='title-azul'><h3>📋 Resumen del Día</h3></div>", unsafe_allow_html=True)
 df = pd.DataFrame(columns=["Producto", "Inicial", "Entradas", "Salidas", "Final"])
 for producto in PRODUCTOS:
     inicial = st.session_state.inicial.get(producto, 0)
@@ -103,3 +143,22 @@ st.dataframe(df, use_container_width=True)
 # Descargar CSV
 if st.download_button("📥 Descargar reporte CSV", data=df.to_csv(index=False), file_name="reporte_inventario.csv"):
     st.success("Reporte generado con éxito.")
+
+# 📊 Seguimiento por producto o fecha
+st.markdown("<hr><h3>🔎 Seguimiento de Kardex</h3>", unsafe_allow_html=True)
+if os.path.exists(KARDEX_FILE):
+    kardex_df = pd.read_csv(KARDEX_FILE)
+    vista = st.radio("Filtrar por:", ["Producto", "Fecha"])
+
+    if vista == "Producto":
+        producto_sel = st.selectbox("Selecciona un producto:", kardex_df["Producto"].unique())
+        filtrado = kardex_df[kardex_df["Producto"] == producto_sel]
+        st.dataframe(filtrado.reset_index(drop=True), use_container_width=True)
+
+    if vista == "Fecha":
+        fecha_sel = st.date_input("Selecciona una fecha:", value=datetime.today())
+        fecha_str = fecha_sel.strftime("%Y-%m-%d")
+        filtrado = kardex_df[kardex_df["Fecha"] == fecha_str]
+        st.dataframe(filtrado.reset_index(drop=True), use_container_width=True)
+else:
+    st.info("Aún no hay movimientos registrados en el Kardex.")
