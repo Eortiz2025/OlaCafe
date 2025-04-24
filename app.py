@@ -23,6 +23,12 @@ st.markdown("""
         font-weight: bold;
         border-radius: 8px;
     }
+    h1 {
+        color: #6f4e37;
+    }
+    .blue-subheader h3 {
+        color: #002c4c !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -42,7 +48,7 @@ if "inventario" not in st.session_state:
     st.session_state.show_entradas = True
     st.session_state.show_salidas = True
 
-st.title("☕ OlaCafe | Control de Inventario Diario")
+st.markdown("""<h1>☕ OlaCafe | Control de Inventario Diario</h1>""", unsafe_allow_html=True)
 
 # Formulario: Inventario inicial
 if st.session_state.show_inicial:
@@ -101,7 +107,7 @@ if st.session_state.show_salidas:
                 st.session_state.show_salidas = False
 
 # Mostrar resumen final del día
-st.subheader("📋 Resumen del Día")
+st.markdown("<div class='blue-subheader'><h3>📋 Resumen del Día</h3></div>", unsafe_allow_html=True)
 df = pd.DataFrame(columns=["Producto", "Inicial", "Entradas", "Salidas", "Final"])
 for producto in PRODUCTOS:
     inicial = st.session_state.inicial.get(producto, 0)
