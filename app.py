@@ -39,6 +39,7 @@ MOVIMIENTOS_FILE = "movimientos.csv"
 KARDEX_FILE = "kardex.csv"
 HOY = datetime.today().strftime("%Y-%m-%d")
 HOY_MOSTRAR = datetime.today().strftime("%d %b %Y")
+ARCHIVO_INICIAL = f"inicial_{HOY}.csv"
 
 # Cargar inventario actual
 if os.path.exists(CSV_FILE):
@@ -83,24 +84,31 @@ def registrar_kardex(producto, movimiento, detalle, cantidad, existencia):
     else:
         nuevo.to_csv(KARDEX_FILE, index=False)
 
-# Inventario inicial
+# Inventario inicial (solo si no existe el archivo)
 if st.session_state.show_inicial:
-    with st.expander("📥 Inventario inicial del día", expanded=False):
-        with st.form("inventario_inicial_form"):
-            st.subheader("Registrar inventario inicial")
-            iniciales = {}
-            for producto in PRODUCTOS:
-                cantidad = st.number_input(f"{producto}", min_value=0, key=f"inicial_{producto}")
-                iniciales[producto] = cantidad
-            submitted = st.form_submit_button("✅ Guardar Inventario Inicial")
-            if submitted:
-                for producto, cantidad in iniciales.items():
-                    st.session_state.inventario[producto] = cantidad
-                    st.session_state.inicial[producto] = cantidad
-                    registrar_movimiento(producto, "Inicial", cantidad)
-                    registrar_kardex(producto, "Inicial", "Inventario del día", cantidad, cantidad)
-                st.success("Inventario inicial registrado correctamente.")
-                st.session_state.show_inicial = False
+    if os.path.exists(ARCHIVO_INICIAL):
+        st.info("⚠️ El inventario inicial ya fue capturado hoy.")
+        st.session_state.show_inicial = False
+    else:
+        with st.expander("📥 Inventario inicial del día", expanded=False):
+            with st.form("inventario_inicial_form"):
+                st.subheader("Registrar inventario inicial")
+                iniciales = {}
+                for producto in PRODUCTOS:
+                    cantidad = st.number_input(f"{producto}", min_value=0, key=f"inicial_{producto}")
+                    iniciales[producto] = cantidad
+                submitted = st.form_submit_button("✅ Guardar Inventario Inicial")
+                if submitted:
+                    df_inicial = []
+                    for producto, cantidad in iniciales.items():
+                        st.session_state.inventario[producto] = cantidad
+                        st.session_state.inicial[producto] = cantidad
+                        registrar_movimiento(producto, "Inicial", cantidad)
+                        registrar_kardex(producto, "Inicial", "Inventario del día", cantidad, cantidad)
+                        df_inicial.append([producto, cantidad])
+                    pd.DataFrame(df_inicial, columns=["Producto", "Cantidad"]).to_csv(ARCHIVO_INICIAL, index=False)
+                    st.success("Inventario inicial registrado correctamente.")
+                    st.session_state.show_inicial = False
 
 # Entradas
 if st.session_state.show_entradas:
@@ -166,3 +174,4 @@ with st.expander("🧾 Ver todos los movimientos registrados"):
 # Descargar CSV
 if st.download_button("📥 Descargar reporte CSV", data=df.to_csv(index=False), file_name="reporte_inventario.csv"):
     st.success("Reporte generado con éxito.")
+
