@@ -88,7 +88,6 @@ def registrar_kardex(producto, movimiento, detalle, cantidad, existencia):
 if st.session_state.show_inicial:
     if os.path.exists(ARCHIVO_INICIAL):
         st.info("⚠️ El inventario inicial ya fue capturado hoy.")
-        st.session_state.show_inicial = False
     else:
         with st.expander("📥 Inventario inicial del día", expanded=False):
             with st.form("inventario_inicial_form"):
@@ -174,4 +173,3 @@ with st.expander("🧾 Ver todos los movimientos registrados"):
 # Descargar CSV
 if st.download_button("📥 Descargar reporte CSV", data=df.to_csv(index=False), file_name="reporte_inventario.csv"):
     st.success("Reporte generado con éxito.")
-
