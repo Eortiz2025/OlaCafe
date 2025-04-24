@@ -1,7 +1,30 @@
 import streamlit as st
 import pandas as pd
+from datetime import datetime
 
 st.set_page_config(page_title="OlaCafe - Control de Inventario", layout="centered")
+
+st.markdown("""
+    <style>
+    .main {
+        background-color: #fdf6f0;
+        color: #2e2e2e;
+    }
+    .stButton > button {
+        background-color: #f77f00;
+        color: white;
+        font-weight: bold;
+        border-radius: 8px;
+        padding: 0.5em 1em;
+    }
+    .stDownloadButton > button {
+        background-color: #007f5f;
+        color: white;
+        font-weight: bold;
+        border-radius: 8px;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 PRODUCTOS = ["Pan Hogaza", "Jamón Serrano", "Jamón de Pavo"]
 RECETAS = {
@@ -15,16 +38,11 @@ if "inventario" not in st.session_state:
     st.session_state.inventario = {p: 0 for p in PRODUCTOS}
     st.session_state.inicial = {p: 0 for p in PRODUCTOS}
     st.session_state.movimientos = []
-
-# Inicializar control de formularios
-if "show_inicial" not in st.session_state:
     st.session_state.show_inicial = True
-if "show_entradas" not in st.session_state:
     st.session_state.show_entradas = True
-if "show_salidas" not in st.session_state:
     st.session_state.show_salidas = True
 
-st.title("🥪 OlaCafe | Control de Inventario Diario")
+st.title("☕ OlaCafe | Control de Inventario Diario")
 
 # Formulario: Inventario inicial
 if st.session_state.show_inicial:
@@ -35,7 +53,7 @@ if st.session_state.show_inicial:
             for producto in PRODUCTOS:
                 cantidad = st.number_input(f"{producto}", min_value=0, key=f"inicial_{producto}")
                 iniciales[producto] = cantidad
-            submitted = st.form_submit_button("Guardar Inventario Inicial")
+            submitted = st.form_submit_button("✅ Guardar Inventario Inicial")
             if submitted:
                 for producto, cantidad in iniciales.items():
                     st.session_state.inventario[producto] = cantidad
@@ -53,7 +71,7 @@ if st.session_state.show_entradas:
             for producto in PRODUCTOS:
                 cantidad = st.number_input(f"Entraron de {producto}", min_value=0, key=f"entrada_{producto}")
                 entradas[producto] = cantidad
-            submitted = st.form_submit_button("Guardar Entradas")
+            submitted = st.form_submit_button("✅ Guardar Entradas")
             if submitted:
                 for producto, cantidad in entradas.items():
                     if cantidad > 0:
@@ -71,7 +89,7 @@ if st.session_state.show_salidas:
             for nombre, receta in RECETAS.items():
                 cantidad = st.number_input(f"Vendidos: {nombre}", min_value=0, key=f"salida_{nombre}")
                 salidas[nombre] = cantidad
-            submitted = st.form_submit_button("Guardar Salidas")
+            submitted = st.form_submit_button("✅ Guardar Salidas")
             if submitted:
                 for nombre, cantidad in salidas.items():
                     if cantidad > 0:
@@ -81,12 +99,6 @@ if st.session_state.show_salidas:
                             st.session_state.movimientos.append((producto, f"Salida ({nombre})", total))
                 st.success("Salidas registradas correctamente.")
                 st.session_state.show_salidas = False
-
-# Botón: Ver inventario actual
-if st.button("📊 Dame el inventario actual"):
-    st.write("### Inventario Actual")
-    df_inv = pd.DataFrame(list(st.session_state.inventario.items()), columns=["Producto", "Cantidad Actual"])
-    st.table(df_inv)
 
 # Mostrar resumen final del día
 st.subheader("📋 Resumen del Día")
