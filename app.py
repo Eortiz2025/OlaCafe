@@ -88,6 +88,11 @@ def registrar_kardex(producto, movimiento, detalle, cantidad, existencia):
 if st.session_state.show_inicial:
     with st.expander("📥 Inventario inicial del día", expanded=False):
         if os.path.exists(ARCHIVO_INICIAL):
+            st.info("⚠️ Ya existe un inventario inicial guardado hoy.")
+            codigo = st.text_input("Ingresa código de autorización para modificar:", type="password")
+            if codigo != "1001":
+                st.stop()
+        if os.path.exists(ARCHIVO_INICIAL):
     st.info("⚠️ Ya existe un inventario inicial guardado hoy.")
     codigo = st.text_input("Ingresa código de autorización para modificar:", type="password")
     if codigo != "1001":
