@@ -12,6 +12,10 @@ CONVERSION_SANDWICH = {
     "sandwich de pavo": {"Pan Hogaza": 2, "Jamón de Pavo": 1},
 }
 
+# Sinónimos para entradas y salidas
+SINONIMOS_ENTRADA = ["entraron", "compra", "compramos", "agrega", "añade", "recibimos", "llegaron", "entró", "reposición", "sumar", "carga", "recarga"]
+SINONIMOS_SALIDA = ["vendimos", "vendieron", "salieron", "salió", "consumo", "usamos", "salida de", "bajaron", "descontar", "gastamos"]
+
 # Inicializar estado si no existe
 if "inventario" not in st.session_state:
     st.session_state.inventario = {
@@ -30,13 +34,10 @@ if st.button("Registrar") and entrada:
     texto = entrada.lower()
     movimientos = []
 
-    # Detectar entradas usando "entraron" o "compra"
+    # Detectar entradas con sinónimos
     for producto in PRODUCTOS:
-        patrones = [
-            f"entraron (\\d+) (?:de )?{producto.lower()}",
-            f"compra (?:de )?(\\d+) (?:de )?{producto.lower()}"
-        ]
-        for patron in patrones:
+        for palabra in SINONIMOS_ENTRADA:
+            patron = f"{palabra} (\\d+) (?:de )?{producto.lower()}"
             match = re.search(patron, texto)
             if match:
                 cantidad = int(match.group(1))
@@ -45,14 +46,15 @@ if st.button("Registrar") and entrada:
 
     # Detectar ventas por combos
     for tipo, receta in CONVERSION_SANDWICH.items():
-        patron = f"vend(?:imos|ieron)? (\\d+) {tipo}"
-        match = re.search(patron, texto)
-        if match:
-            cantidad = int(match.group(1))
-            for prod, cant in receta.items():
-                total = cantidad * cant
-                st.session_state.inventario[prod] -= total
-                movimientos.append((prod, "Salida", total))
+        for palabra in SINONIMOS_SALIDA:
+            patron = f"{palabra} (\\d+) {tipo}"
+            match = re.search(patron, texto)
+            if match:
+                cantidad = int(match.group(1))
+                for prod, cant in receta.items():
+                    total = cantidad * cant
+                    st.session_state.inventario[prod] -= total
+                    movimientos.append((prod, "Salida", total))
 
     # Detectar ventas de toast (cada palabra "toast" cuenta como 1)
     toast_count = len(re.findall(r"\\btoast\\b", texto))
