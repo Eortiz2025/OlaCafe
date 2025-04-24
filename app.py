@@ -37,6 +37,7 @@ RECETAS = {
 CSV_FILE = "inventario_actual.csv"
 KARDEX_FILE = "kardex.csv"
 HOY = datetime.today().strftime("%Y-%m-%d")
+HOY_MOSTRAR = datetime.today().strftime("%d/%m/%y")
 
 # Cargar estado previo si existe
 if os.path.exists(CSV_FILE):
@@ -129,7 +130,7 @@ inventario_actual = pd.DataFrame(list(st.session_state.inventario.items()), colu
 inventario_actual.to_csv(CSV_FILE, index=False)
 
 # Mostrar resumen final del día
-st.markdown("<div class='title-azul'><h3>📋 Resumen del Día</h3></div>", unsafe_allow_html=True)
+st.markdown(f"<div class='title-azul'><h3>📋 Resumen del Día - {HOY_MOSTRAR}</h3></div>", unsafe_allow_html=True)
 df = pd.DataFrame(columns=["Producto", "Inicial", "Entradas", "Salidas", "Final"])
 for producto in PRODUCTOS:
     inicial = st.session_state.inicial.get(producto, 0)
