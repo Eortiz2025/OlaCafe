@@ -105,7 +105,7 @@ def guardar_inventario_actual_si_cambios():
 
 # Inventario inicial
 if st.session_state.show_inicial:
-    with st.expander("📅 Inventario inicial del día", expanded=False):
+    with st.expander("📥 Inventario inicial del día", expanded=False):
         with st.form("inventario_inicial_form"):
             st.subheader("Registrar inventario inicial")
             iniciales = {}
@@ -197,5 +197,31 @@ df_mov = pd.DataFrame(st.session_state.movimientos, columns=["Producto", "Movimi
 with st.expander("🧾 Ver todos los movimientos registrados"):
     st.dataframe(df_mov, use_container_width=True)
 
-if st.download_button("📅 Descargar reporte CSV", data=df.to_csv(index=False), file_name="reporte_inventario.csv"):
+if st.download_button("📥 Descargar reporte CSV", data=df.to_csv(index=False), file_name="reporte_inventario.csv"):
     st.success("Reporte generado con éxito.")
+
+# Borrado protegido
+with st.expander("🗑️ Borrar datos del día"):
+    clave = st.text_input("Ingrese clave de administrador para continuar:", type="password")
+    if clave == "1001":
+        borrar = st.date_input("Seleccionar fecha a borrar", value=datetime.today())
+        fecha_str = borrar.strftime("%Y-%m-%d")
+        if st.button("🚨 Borrar inventario inicial, entradas, salidas y movimientos de ese día"):
+            if os.path.exists(MOVIMIENTOS_FILE):
+                df_mov = pd.read_csv(MOVIMIENTOS_FILE)
+                df_mov = df_mov[df_mov["Fecha"] != fecha_str]
+                df_mov.to_csv(MOVIMIENTOS_FILE, index=False)
+            if os.path.exists(KARDEX_FILE):
+                df_kardex = pd.read_csv(KARDEX_FILE)
+                df_kardex = df_kardex[df_kardex["Fecha"] != fecha_str]
+                df_kardex.to_csv(KARDEX_FILE, index=False)
+            archivo_inicial = f"inicial_{fecha_str}.csv"
+            if os.path.exists(archivo_inicial):
+                os.remove(archivo_inicial)
+            if fecha_str == HOY:
+                for key in ["inventario", "inicial", "movimientos"]:
+                    st.session_state[key] = {p: 0 for p in PRODUCTOS} if key != "movimientos" else []
+                pd.DataFrame(PRODUCTOS, columns=["Producto"]).assign(**{"Cantidad Actual": 0}).to_csv(CSV_FILE, index=False)
+            st.success(f"Datos del día {fecha_str} borrados correctamente.")
+    elif clave != "":
+        st.error("Clave incorrecta. No tienes permiso para borrar datos.")
