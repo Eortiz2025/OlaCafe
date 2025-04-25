@@ -94,9 +94,18 @@ def registrar_kardex(producto, movimiento, detalle, cantidad, existencia):
     else:
         nuevo.to_csv(KARDEX_FILE, index=False)
 
+def guardar_inventario_actual_si_cambios():
+    actual_df = pd.DataFrame(list(st.session_state.inventario.items()), columns=["Producto", "Cantidad Actual"])
+    if not os.path.exists(CSV_FILE):
+        actual_df.to_csv(CSV_FILE, index=False)
+        return
+    previo_df = pd.read_csv(CSV_FILE)
+    if not actual_df.equals(previo_df):
+        actual_df.to_csv(CSV_FILE, index=False)
+
 # Inventario inicial
 if st.session_state.show_inicial:
-    with st.expander("📥 Inventario inicial del día", expanded=False):
+    with st.expander("📅 Inventario inicial del día", expanded=False):
         with st.form("inventario_inicial_form"):
             st.subheader("Registrar inventario inicial")
             iniciales = {}
@@ -138,6 +147,7 @@ if st.session_state.show_entradas:
                         st.session_state.inventario[producto] += cantidad
                         registrar_movimiento(producto, "Entrada", cantidad)
                         registrar_kardex(producto, "Entrada", "Reposición", cantidad, st.session_state.inventario[producto])
+                guardar_inventario_actual_si_cambios()
                 st.success("Entradas registradas correctamente.")
                 st.session_state.show_entradas = False
 
@@ -167,13 +177,11 @@ if st.session_state.show_salidas:
                                 st.session_state.inventario[producto] -= total
                                 registrar_movimiento(producto, f"Salida - {nombre}", total)
                                 registrar_kardex(producto, "Salida", nombre, total, st.session_state.inventario[producto])
+                guardar_inventario_actual_si_cambios()
                 st.success("Salidas registradas correctamente.")
                 st.session_state.show_salidas = False
 
 # Resumen
-inventario_actual = pd.DataFrame(list(st.session_state.inventario.items()), columns=["Producto", "Cantidad Actual"])
-inventario_actual.to_csv(CSV_FILE, index=False)
-
 st.markdown(f"<div class='title-azul'><h3>📋 Resumen del Día - {HOY_MOSTRAR}</h3></div>", unsafe_allow_html=True)
 df = pd.DataFrame(columns=["Producto", "Inicial", "Entradas", "Salidas", "Final"])
 for producto in PRODUCTOS:
@@ -189,31 +197,5 @@ df_mov = pd.DataFrame(st.session_state.movimientos, columns=["Producto", "Movimi
 with st.expander("🧾 Ver todos los movimientos registrados"):
     st.dataframe(df_mov, use_container_width=True)
 
-if st.download_button("📥 Descargar reporte CSV", data=df.to_csv(index=False), file_name="reporte_inventario.csv"):
+if st.download_button("📅 Descargar reporte CSV", data=df.to_csv(index=False), file_name="reporte_inventario.csv"):
     st.success("Reporte generado con éxito.")
-
-# Borrado protegido
-with st.expander("🗑️ Borrar datos del día"):
-    clave = st.text_input("Ingrese clave de administrador para continuar:", type="password")
-    if clave == "1001":
-        borrar = st.date_input("Seleccionar fecha a borrar", value=datetime.today())
-        fecha_str = borrar.strftime("%Y-%m-%d")
-        if st.button("🚨 Borrar inventario inicial, entradas, salidas y movimientos de ese día"):
-            if os.path.exists(MOVIMIENTOS_FILE):
-                df_mov = pd.read_csv(MOVIMIENTOS_FILE)
-                df_mov = df_mov[df_mov["Fecha"] != fecha_str]
-                df_mov.to_csv(MOVIMIENTOS_FILE, index=False)
-            if os.path.exists(KARDEX_FILE):
-                df_kardex = pd.read_csv(KARDEX_FILE)
-                df_kardex = df_kardex[df_kardex["Fecha"] != fecha_str]
-                df_kardex.to_csv(KARDEX_FILE, index=False)
-            archivo_inicial = f"inicial_{fecha_str}.csv"
-            if os.path.exists(archivo_inicial):
-                os.remove(archivo_inicial)
-            if fecha_str == HOY:
-                for key in ["inventario", "inicial", "movimientos"]:
-                    st.session_state[key] = {p: 0 for p in PRODUCTOS} if key != "movimientos" else []
-                pd.DataFrame(PRODUCTOS, columns=["Producto"]).assign(**{"Cantidad Actual": 0}).to_csv(CSV_FILE, index=False)
-            st.success(f"Datos del día {fecha_str} borrados correctamente.")
-    elif clave != "":
-        st.error("Clave incorrecta. No tienes permiso para borrar datos.")
