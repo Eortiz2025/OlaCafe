@@ -69,6 +69,16 @@ if "inicial" not in st.session_state:
     st.session_state.inicial = inventario_inicial.copy()
 if "movimientos" not in st.session_state:
     st.session_state.movimientos = movimientos_prev.copy()
+if "movimientos_aplicados" not in st.session_state:
+    for producto, tipo, cantidad in movimientos_prev:
+        cantidad = int(cantidad)
+        if tipo == "Entrada":
+            st.session_state.inventario[producto] += cantidad
+        elif tipo.startswith("Salida"):
+            st.session_state.inventario[producto] -= cantidad
+        elif tipo == "Inicial":
+            st.session_state.inventario[producto] = cantidad
+    st.session_state.movimientos_aplicados = True
 if "show_inicial" not in st.session_state:
     st.session_state.show_inicial = True
 if "show_entradas" not in st.session_state:
@@ -188,7 +198,7 @@ for producto in PRODUCTOS:
     inicial = st.session_state.inicial.get(producto, 0)
     entradas = sum(int(m[2]) for m in st.session_state.movimientos if m[0] == producto and m[1] == "Entrada")
     salidas = sum(int(m[2]) for m in st.session_state.movimientos if m[0] == producto and m[1].startswith("Salida"))
-    final = st.session_state.inventario[producto]
+    final = inicial + entradas - salidas
     df.loc[len(df)] = [producto, inicial, entradas, salidas, final]
 
 st.dataframe(df, use_container_width=True)
