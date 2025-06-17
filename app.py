@@ -3,8 +3,8 @@ import streamlit as st
 import io
 from datetime import datetime
 
-st.set_page_config(page_title="Agente de Compras", page_icon="💼")
-st.title("💼 Agente de Compras")
+st.set_page_config(page_title="Agente de Compras 2025", page_icon="💼")
+st.title("💼 Agente de Compras 2025")
 
 # Subida del archivo
 archivo = st.file_uploader("🗂️ Sube el archivo exportado desde Erply (.xls)", type=["xls"])
@@ -12,22 +12,23 @@ archivo = st.file_uploader("🗂️ Sube el archivo exportado desde Erply (.xls)
 # Preguntar número de días
 dias_input = st.text_input("⏰ ¿Cuántos días deseas calcular para VtaProm? (Escribe un número)")
 
-# Validar que sea un número entero positivo
+# Validar número
 if not dias_input.strip().isdigit() or int(dias_input) <= 0:
     st.warning("⚠️ Por favor escribe un número válido de días (mayor que 0) para continuar.")
     st.stop()
 
 dias_usuario = int(dias_input)
 
-# Calcular días transcurridos desde el 1 de enero
+# Días transcurridos en 2025
 dias_transcurridos_2025 = (datetime.today() - datetime.today().replace(month=1, day=1)).days + 1
 st.info(f"📅 Días transcurridos en 2025 hasta hoy: {dias_transcurridos_2025}")
 
 if archivo:
     try:
-        # Leer archivo Excel con encabezados a partir de la fila 4
-        tabla = pd.read_excel(archivo, skiprows=3)
+        # Leer .xls con motor xlrd
+        tabla = pd.read_excel(archivo, skiprows=3, engine="xlrd")
 
+        # Eliminar columna vacía si existe
         if tabla.columns[0] in ("", "Unnamed: 0", "No", "Moneda"):
             tabla = tabla.iloc[:, 1:]
 
@@ -44,6 +45,7 @@ if archivo:
             st.error("❌ El archivo no tiene suficientes columnas.")
             st.stop()
 
+        # Limpiar columnas
         tabla = tabla.drop(columns=[
             "Ventas netas totales ($)", "Stock (apartado)", "Stock (disponible)",
             "Ventas netas totales ($) (2)"
@@ -51,24 +53,23 @@ if archivo:
 
         tabla = tabla.rename(columns={
             "Stock (total)": "Stock",
-            "Cantidad vendida": "V365",  # representa ventas 2025 acumuladas
+            "Cantidad vendida": "V365",  # Ventas acumuladas 2025
             "Cantidad vendida (2)": "V30D"
         })
 
-        # Filtrar productos con proveedor válido
         tabla = tabla[tabla["Proveedor"].notna()]
         tabla = tabla[tabla["Proveedor"].astype(str).str.strip() != ""]
 
-        # Filtro opcional por proveedor
+        # Filtro por proveedor (opcional)
         if st.checkbox("¿Deseas calcular sólo un proveedor?", value=False):
             proveedor = st.selectbox("Selecciona el proveedor a calcular:", sorted(tabla["Proveedor"].unique()))
             tabla = tabla[tabla["Proveedor"] == proveedor]
 
-        # Convertir columnas a numérico
+        # Convertir columnas numéricas
         for col in ["V365", "V30D", "Stock"]:
             tabla[col] = pd.to_numeric(tabla[col], errors="coerce").fillna(0).round()
 
-        # Cálculos clave
+        # Cálculos principales
         tabla["VtaDiaria"] = (tabla["V365"] / dias_transcurridos_2025).round(2)
         tabla["VtaProm"] = (tabla["VtaDiaria"] * dias_usuario).round()
 
@@ -84,13 +85,11 @@ if archivo:
         tabla["Max"] = max_calculado
         tabla["Compra"] = (tabla["Max"] - tabla["Stock"]).clip(lower=0).round()
 
-        # Limpiar temporal
+        # Limpiar
         tabla = tabla.drop(columns=["VtaDiaria"])
-
-        # Filtrar productos a comprar
         tabla = tabla[tabla["Compra"] > 0].sort_values("Nombre")
 
-        # Mostrar o no proveedor
+        # Mostrar proveedor (opcional)
         if st.checkbox("¿Mostrar Proveedor?", value=False):
             columnas_finales = ["Código", "Código EAN", "Nombre", "Proveedor", "Stock", "V365", "VtaProm", "V30D", "Max", "Compra"]
         else:
@@ -102,7 +101,7 @@ if archivo:
         st.success("✅ Archivo procesado correctamente")
         st.dataframe(tabla)
 
-        # Exportar a Excel
+        # Descargar Excel
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             tabla.to_excel(writer, index=False, sheet_name='Compra del día')
