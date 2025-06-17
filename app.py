@@ -20,12 +20,12 @@ if not dias_input.strip().isdigit() or int(dias_input) <= 0:
 dias_usuario = int(dias_input)
 
 # Calcular días transcurridos desde el 1 de enero
-dias_transcurridos_2025 = (datetime.today() - datetime(datetime.today().replace(month=1, day=1))).days + 1
+dias_transcurridos_2025 = (datetime.today() - datetime.today().replace(month=1, day=1)).days + 1
 st.info(f"📅 Días transcurridos en 2025 hasta hoy: {dias_transcurridos_2025}")
 
 if archivo:
     try:
-        # Leer el archivo Excel, saltando encabezados basura
+        # Leer archivo Excel con encabezados a partir de la fila 4
         tabla = pd.read_excel(archivo, skiprows=3)
 
         if tabla.columns[0] in ("", "Unnamed: 0", "No", "Moneda"):
@@ -44,7 +44,6 @@ if archivo:
             st.error("❌ El archivo no tiene suficientes columnas.")
             st.stop()
 
-        # Limpiar y renombrar
         tabla = tabla.drop(columns=[
             "Ventas netas totales ($)", "Stock (apartado)", "Stock (disponible)",
             "Ventas netas totales ($) (2)"
@@ -52,28 +51,27 @@ if archivo:
 
         tabla = tabla.rename(columns={
             "Stock (total)": "Stock",
-            "Cantidad vendida": "V365",  # Aquí representa ventas de 2025
+            "Cantidad vendida": "V365",  # representa ventas 2025 acumuladas
             "Cantidad vendida (2)": "V30D"
         })
 
-        # Filtro de proveedor válido
+        # Filtrar productos con proveedor válido
         tabla = tabla[tabla["Proveedor"].notna()]
         tabla = tabla[tabla["Proveedor"].astype(str).str.strip() != ""]
 
-        # Opción de filtrar por proveedor
+        # Filtro opcional por proveedor
         if st.checkbox("¿Deseas calcular sólo un proveedor?", value=False):
             proveedor = st.selectbox("Selecciona el proveedor a calcular:", sorted(tabla["Proveedor"].unique()))
             tabla = tabla[tabla["Proveedor"] == proveedor]
 
-        # Limpieza de columnas numéricas
+        # Convertir columnas a numérico
         for col in ["V365", "V30D", "Stock"]:
             tabla[col] = pd.to_numeric(tabla[col], errors="coerce").fillna(0).round()
 
-        # ✅ Nuevos cálculos
+        # Cálculos clave
         tabla["VtaDiaria"] = (tabla["V365"] / dias_transcurridos_2025).round(2)
         tabla["VtaProm"] = (tabla["VtaDiaria"] * dias_usuario).round()
 
-        # Calcular máximo sugerido
         max_calculado = []
         for _, row in tabla.iterrows():
             if row["V30D"] == 0:
@@ -85,9 +83,11 @@ if archivo:
 
         tabla["Max"] = max_calculado
         tabla["Compra"] = (tabla["Max"] - tabla["Stock"]).clip(lower=0).round()
+
+        # Limpiar temporal
         tabla = tabla.drop(columns=["VtaDiaria"])
 
-        # Filtrar productos con compra positiva
+        # Filtrar productos a comprar
         tabla = tabla[tabla["Compra"] > 0].sort_values("Nombre")
 
         # Mostrar o no proveedor
@@ -108,6 +108,7 @@ if archivo:
             tabla.to_excel(writer, index=False, sheet_name='Compra del día')
             worksheet = writer.sheets['Compra del día']
             worksheet.freeze_panes = worksheet['A2']
+
         st.download_button(
             label="📄 Descargar Excel",
             data=output.getvalue(),
@@ -115,7 +116,7 @@ if archivo:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
-        # 🔥 Productos donde V30D > VtaProm
+        # Productos calientes
         st.subheader("🔥 Top 10 Productos donde V30D supera a VtaProm (Orden alfabético)")
         calientes = tabla[tabla["V30D"] > tabla["VtaProm"]]
         if not calientes.empty:
