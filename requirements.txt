@@ -4,3 +4,4 @@ openpyxl
 lxml
 matplotlib
 numpy
+xlrd==1.2.0
