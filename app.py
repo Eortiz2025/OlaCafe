@@ -21,7 +21,7 @@ dias = int(dias)
 
 if archivo:
     try:
-        # ✅ Lectura robusta desde HTML interno del .xls
+        # ✅ Lectura robusta desde HTML embebido en .xls
         tabla = pd.read_html(archivo, header=3)[0]
         if tabla.columns[0] in ("", "Unnamed: 0", "No", "Moneda"):
             tabla = tabla.iloc[:, 1:]
@@ -47,7 +47,7 @@ if archivo:
         ]
         tabla = tabla.drop(columns=columnas_a_eliminar)
 
-        # Renombrar columnas
+        # Renombrar columnas clave
         tabla = tabla.rename(columns={
             "Stock (total)": "Stock",
             "Cantidad vendida": "V365",
@@ -71,12 +71,14 @@ if archivo:
         tabla["V30D"] = pd.to_numeric(tabla["V30D"], errors="coerce").fillna(0).round()
         tabla["Stock"] = pd.to_numeric(tabla["Stock"], errors="coerce").fillna(0).round()
 
-        # ✅ Cálculo actualizado con días reales de 2025
-        dias_transcurridos_2025 = (datetime.today() - datetime.today().replace(month=1, day=1)).days + 1
+        # ✅ Calcular días reales (ajustando 10 días no trabajados)
+        dias_transcurridos_2025 = (datetime.today() - datetime(datetime.today().year, 1, 1)).days + 1 - 10
+        st.info(f"📅 Días considerados para VtaDiaria: {dias_transcurridos_2025} (ajustado por 10 no laborados)")
+
         tabla["VtaDiaria"] = (tabla["V365"] / dias_transcurridos_2025).round(2)
         tabla["VtaProm"] = (tabla["VtaDiaria"] * dias).round()
 
-        # Cálculo del máximo sugerido
+        # Calcular Max sugerido
         max_calculado = []
         for i, row in tabla.iterrows():
             if row["V30D"] == 0:
@@ -89,13 +91,11 @@ if archivo:
         tabla["Max"] = max_calculado
         tabla["Compra"] = (tabla["Max"] - tabla["Stock"]).clip(lower=0).round()
 
-        # Eliminar columna temporal
+        # Eliminar temporal
         tabla = tabla.drop(columns=["VtaDiaria"])
-
-        # Filtrar productos a comprar
         tabla = tabla[tabla["Compra"] > 0].sort_values("Nombre")
 
-        # Mostrar proveedor si se elige
+        # Mostrar proveedor si se desea
         mostrar_proveedor = st.checkbox("¿Mostrar Proveedor?", value=False)
 
         if mostrar_proveedor:
@@ -119,29 +119,21 @@ if archivo:
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             tabla.to_excel(writer, index=False, sheet_name='Compra del día')
-            workbook = writer.book
             worksheet = writer.sheets['Compra del día']
             worksheet.freeze_panes = worksheet['A2']
 
-        processed_data = output.getvalue()
-
         st.download_button(
             label="📄 Descargar Excel",
-            data=processed_data,
+            data=output.getvalue(),
             file_name="Compra del día.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
-        # 🔥 Productos donde V30D supera VtaProm
+        # 🔥 Top productos con V30D > VtaProm
         st.subheader("🔥 Top 10 Productos donde V30D supera a VtaProm (Orden alfabético)")
-
         productos_calientes = tabla[tabla["V30D"] > tabla["VtaProm"]]
-
         if not productos_calientes.empty:
-            productos_calientes = productos_calientes.sort_values("Nombre", ascending=True)
-            top_productos = productos_calientes.head(10)
-            columnas_a_mostrar = ["Código", "Nombre", "V365", "VtaProm", "V30D"]
-            st.dataframe(top_productos[columnas_a_mostrar])
+            st.dataframe(productos_calientes[["Código", "Nombre", "V365", "VtaProm", "V30D"]].head(10))
         else:
             st.info("✅ No hay productos con V30D mayores que VtaProm en este momento.")
 
