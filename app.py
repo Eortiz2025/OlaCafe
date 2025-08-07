@@ -1,18 +1,24 @@
 import streamlit as st
 import pandas as pd
 import datetime
+import os
 
 st.set_page_config(page_title="Captura de Votantes", layout="centered")
-st.title("🗳️ Registros promovidos")
+st.title("🗳️ Registro de Votantes por Promotor")
 
-# Lista fija de nombres permitidos
+# Archivo CSV donde se guarda todo
+ARCHIVO_DATOS = "votantes.csv"
+
+# Lista fija de usuarios válidos
 usuarios_validos = ["Tania", "Olga", "Emilio", "Sergio", "Juan", "Elvia", "Claudia", "admin"]
 
-# Base de datos inicial
-if "datos" not in st.session_state:
-    st.session_state.datos = pd.DataFrame(columns=["Promotor", "Votante", "Teléfono", "¿Llamó?", "Fecha"])
+# Cargar datos desde el archivo si existe
+if os.path.exists(ARCHIVO_DATOS):
+    df = pd.read_csv(ARCHIVO_DATOS)
+else:
+    df = pd.DataFrame(columns=["Promotor", "Votante", "Teléfono", "¿Llamó?", "Fecha"])
 
-# Ingreso simple por nombre
+# Entrada del usuario
 nombre = st.text_input("Escribe tu nombre para acceder (ej. Tania)").strip()
 
 if nombre:
@@ -21,8 +27,8 @@ if nombre:
 
         if nombre == "admin":
             st.subheader("📊 Vista de administrador")
-            st.dataframe(st.session_state.datos)
-            st.download_button("📥 Descargar Excel", st.session_state.datos.to_csv(index=False).encode(), file_name="votantes.csv")
+            st.dataframe(df)
+            st.download_button("📥 Descargar Excel", df.to_csv(index=False).encode(), file_name="votantes.csv")
         else:
             st.subheader("✍️ Captura de votante")
 
@@ -40,15 +46,11 @@ if nombre:
                         "¿Llamó?": "✅ Sí" if llamo else "❌ No",
                         "Fecha": datetime.date.today().isoformat()
                     }
-                    st.session_state.datos = pd.concat(
-                        [st.session_state.datos, pd.DataFrame([nueva_fila])],
-                        ignore_index=True
-                    )
+                    df = pd.concat([df, pd.DataFrame([nueva_fila])], ignore_index=True)
+                    df.to_csv(ARCHIVO_DATOS, index=False)
                     st.success("✔️ Registro guardado")
 
             st.subheader("📄 Tus registros")
-            filtro = st.session_state.datos[st.session_state.datos["Promotor"] == nombre]
-            st.dataframe(filtro)
-
+            st.dataframe(df[df["Promotor"] == nombre])
     else:
-        st.error("⚠️ Este nombre no está autorizado. Pide acceso al administrador.")
+        st.error("⚠️ Este nombre no está autorizado.")
