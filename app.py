@@ -1,141 +1,91 @@
-import pandas as pd
 import streamlit as st
-import io
-from datetime import datetime
+import pandas as pd
+import datetime
 
-st.set_page_config(page_title="Agente de Compras 2025", page_icon="💼")
-st.title("💼 Agente de Compras 2025")
+# -------------------------------
+# Configuración inicial
+st.set_page_config(page_title="Control de Promotores", layout="centered")
+st.title("📋 Registro de Votantes por Promotor")
 
-# Subida del archivo
-archivo = st.file_uploader("🗂️ Sube el archivo exportado desde Erply (.xls)", type=["xls"])
+# -------------------------------
+# Base de datos en memoria (o en archivo si lo deseas guardar)
+if "usuarios" not in st.session_state:
+    st.session_state.usuarios = {}
 
-# Preguntar número de días
-dias = st.text_input("⏰ ¿Cuántos días deseas calcular para VtaProm? (Escribe un número)")
+if "datos" not in st.session_state:
+    st.session_state.datos = pd.DataFrame(columns=["Promotor", "Votante", "Teléfono", "¿Llamó?", "Fecha"])
 
-# Validar que sea un número entero positivo
-if not dias.strip().isdigit() or int(dias) <= 0:
-    st.warning("⚠️ Por favor escribe un número válido de días (mayor que 0) para continuar.")
-    st.stop()
+# -------------------------------
+# Función para validar usuarios
+def autenticar(usuario, contraseña):
+    if usuario in st.session_state.usuarios:
+        return st.session_state.usuarios[usuario] == contraseña
+    return False
 
-dias = int(dias)
+# -------------------------------
+# Registro o inicio de sesión
+modo = st.sidebar.radio("Acceso", ["🔐 Iniciar sesión", "🆕 Registrarse"])
 
-if archivo:
-    try:
-        # ✅ Lectura robusta desde HTML embebido en .xls
-        tabla = pd.read_html(archivo, header=3)[0]
-        if tabla.columns[0] in ("", "Unnamed: 0", "No", "Moneda"):
-            tabla = tabla.iloc[:, 1:]
-
-        # Encabezados esperados
-        columnas_deseadas = [
-            "Código", "Código EAN", "Nombre",
-            "Stock (total)", "Stock (apartado)", "Stock (disponible)",
-            "Proveedor", "Cantidad vendida", "Ventas netas totales ($)",
-            "Cantidad vendida (2)", "Ventas netas totales ($) (2)"
-        ]
-
-        if len(tabla.columns) >= len(columnas_deseadas):
-            tabla.columns = columnas_deseadas[:len(tabla.columns)]
+if modo == "🆕 Registrarse":
+    st.sidebar.subheader("🆕 Registro")
+    nuevo_usuario = st.sidebar.text_input("Nombre de promotor")
+    nueva_contraseña = st.sidebar.text_input("Contraseña", type="password")
+    if st.sidebar.button("Crear cuenta"):
+        if nuevo_usuario in st.session_state.usuarios:
+            st.sidebar.warning("⚠️ Este usuario ya existe.")
+        elif nuevo_usuario.strip() == "":
+            st.sidebar.warning("⚠️ Nombre inválido.")
         else:
-            st.error("❌ El archivo no tiene suficientes columnas.")
-            st.stop()
+            st.session_state.usuarios[nuevo_usuario] = nueva_contraseña
+            st.sidebar.success("✅ Usuario registrado. Ahora inicia sesión.")
 
-        # Eliminar columnas innecesarias
-        columnas_a_eliminar = [
-            "Ventas netas totales ($)", "Stock (apartado)", "Stock (disponible)",
-            "Ventas netas totales ($) (2)"
-        ]
-        tabla = tabla.drop(columns=columnas_a_eliminar)
-
-        # Renombrar columnas clave
-        tabla = tabla.rename(columns={
-            "Stock (total)": "Stock",
-            "Cantidad vendida": "V365",
-            "Cantidad vendida (2)": "V30D"
-        })
-
-        # Filtrar productos sin proveedor
-        tabla = tabla[tabla["Proveedor"].notna()]
-        tabla = tabla[tabla["Proveedor"].astype(str).str.strip() != ""]
-
-        # 👉 Calcular solo un proveedor si se desea
-        calcular_proveedor = st.checkbox("¿Deseas calcular sólo un proveedor?", value=False)
-
-        if calcular_proveedor:
-            lista_proveedores = tabla["Proveedor"].dropna().unique()
-            proveedor_seleccionado = st.selectbox("Selecciona el proveedor a calcular:", sorted(lista_proveedores))
-            tabla = tabla[tabla["Proveedor"] == proveedor_seleccionado]
-
-        # Convertir y limpiar columnas numéricas
-        tabla["V365"] = pd.to_numeric(tabla["V365"], errors="coerce").fillna(0).round()
-        tabla["V30D"] = pd.to_numeric(tabla["V30D"], errors="coerce").fillna(0).round()
-        tabla["Stock"] = pd.to_numeric(tabla["Stock"], errors="coerce").fillna(0).round()
-
-        # ✅ Calcular días reales (ajustando 10 días no trabajados)
-        dias_transcurridos_2025 = (datetime.today() - datetime(datetime.today().year, 1, 1)).days + 1 - 10
-        st.info(f"📅 Días considerados para VtaDiaria: {dias_transcurridos_2025} (ajustado por 10 no laborados)")
-
-        tabla["VtaDiaria"] = (tabla["V365"] / dias_transcurridos_2025).round(2)
-        tabla["VtaProm"] = (tabla["VtaDiaria"] * dias).round()
-
-        # Calcular Max sugerido
-        max_calculado = []
-        for i, row in tabla.iterrows():
-            if row["V30D"] == 0:
-                max_val = 0.5 * row["VtaProm"]
-            else:
-                intermedio = max(0.6 * row["V30D"] + 0.4 * row["VtaProm"], row["V30D"])
-                max_val = min(intermedio, row["V30D"] * 1.5)
-            max_calculado.append(round(max_val))
-
-        tabla["Max"] = max_calculado
-        tabla["Compra"] = (tabla["Max"] - tabla["Stock"]).clip(lower=0).round()
-
-        # Eliminar temporal
-        tabla = tabla.drop(columns=["VtaDiaria"])
-        tabla = tabla[tabla["Compra"] > 0].sort_values("Nombre")
-
-        # Mostrar proveedor si se desea
-        mostrar_proveedor = st.checkbox("¿Mostrar Proveedor?", value=False)
-
-        if mostrar_proveedor:
-            columnas_finales = [
-                "Código", "Código EAN", "Nombre", "Proveedor", "Stock",
-                "V365", "VtaProm", "V30D", "Max", "Compra"
-            ]
+else:
+    st.sidebar.subheader("🔐 Inicio de sesión")
+    usuario = st.sidebar.text_input("Usuario")
+    contraseña = st.sidebar.text_input("Contraseña", type="password")
+    if st.sidebar.button("Entrar"):
+        if autenticar(usuario, contraseña):
+            st.session_state.usuario_activo = usuario
+            st.sidebar.success(f"Bienvenido {usuario}")
         else:
-            tabla = tabla.drop(columns=["Proveedor"])
-            columnas_finales = [
-                "Código", "Código EAN", "Nombre", "Stock",
-                "V365", "VtaProm", "V30D", "Max", "Compra"
-            ]
+            st.sidebar.error("Acceso denegado.")
 
-        tabla = tabla[columnas_finales]
+# -------------------------------
+# App principal si hay sesión iniciada
+if "usuario_activo" in st.session_state:
 
-        st.success("✅ Archivo procesado correctamente")
-        st.dataframe(tabla)
+    usuario = st.session_state.usuario_activo
 
-        # Descargar Excel
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            tabla.to_excel(writer, index=False, sheet_name='Compra del día')
-            worksheet = writer.sheets['Compra del día']
-            worksheet.freeze_panes = worksheet['A2']
+    st.subheader(f"Bienvenido: {usuario}")
 
-        st.download_button(
-            label="📄 Descargar Excel",
-            data=output.getvalue(),
-            file_name="Compra del día.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+    if usuario == "admin":
+        st.success("🔒 Vista de administrador")
+        st.dataframe(st.session_state.datos)
+        if st.download_button("📥 Exportar a Excel", st.session_state.datos.to_csv(index=False).encode(), file_name="votantes.csv"):
+            st.success("Archivo exportado.")
+    else:
+        st.subheader("📌 Captura de votantes")
 
-        # 🔥 Top productos con V30D > VtaProm
-        st.subheader("🔥 Top 10 Productos donde V30D supera a VtaProm (Orden alfabético)")
-        productos_calientes = tabla[tabla["V30D"] > tabla["VtaProm"]]
-        if not productos_calientes.empty:
-            st.dataframe(productos_calientes[["Código", "Nombre", "V365", "VtaProm", "V30D"]].head(10))
-        else:
-            st.info("✅ No hay productos con V30D mayores que VtaProm en este momento.")
+        with st.form("formulario"):
+            nombre_votante = st.text_input("Nombre del votante")
+            telefono = st.text_input("Teléfono (opcional)")
+            llamado = st.checkbox("¿Ya le llamaste?")
+            enviar = st.form_submit_button("Guardar")
 
-    except Exception as e:
-        st.error(f"❌ Error al procesar el archivo: {e}")
+            if enviar:
+                nueva_fila = {
+                    "Promotor": usuario,
+                    "Votante": nombre_votante,
+                    "Teléfono": telefono,
+                    "¿Llamó?": "✅ Sí" if llamado else "❌ No",
+                    "Fecha": datetime.date.today().isoformat()
+                }
+                st.session_state.datos = pd.concat(
+                    [st.session_state.datos, pd.DataFrame([nueva_fila])],
+                    ignore_index=True
+                )
+                st.success("✅ Registro guardado.")
+
+        st.subheader("📋 Tus registros")
+        registros = st.session_state.datos
+        st.dataframe(registros[registros["Promotor"] == usuario])
