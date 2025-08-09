@@ -2,31 +2,47 @@
 import streamlit as st
 import streamlit.components.v1 as components
 
-st.set_page_config(page_title="Snake en Streamlit", layout="centered")
-st.title("🐍 Snake (embebido en Streamlit)")
+st.set_page_config(page_title="Snake en Streamlit (lento)", layout="centered")
+st.title("🐍 Snake (velocidad lenta) — embebido en Streamlit")
+st.caption("Controles: flechas ←↑→↓  ·  Pausa: Barra espaciadora  ·  Reiniciar: botón")
 
 html = """
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
-  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; }
+  :root { color-scheme: dark; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; background:#0b0b0b; }
   .wrap { display:flex; flex-direction:column; align-items:center; gap:12px; padding:12px; }
-  canvas { background:#111; border-radius:12px; box-shadow:0 6px 24px rgba(0,0,0,.25); }
+  canvas { background:#111; border-radius:14px; box-shadow:0 6px 24px rgba(0,0,0,.35); touch-action:none; }
   .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; justify-content:center; }
-  button { padding:8px 12px; border-radius:10px; border:1px solid #ddd; cursor:pointer; }
-  .pill { background:#f3f3f3; padding:6px 10px; border-radius:999px; font-size:14px; }
+  button { padding:8px 12px; border-radius:10px; border:1px solid #2b2b2b; cursor:pointer; background:#1b1b1b; color:#fff; }
+  .pill { background:#191919; padding:6px 10px; border-radius:999px; font-size:14px; color:#ddd; border:1px solid #2a2a2a;}
+  .controls { display:none; gap:8px; margin-top:6px; }
+  .ctrl { width:56px; height:56px; border-radius:12px; border:1px solid #2b2b2b; background:#1b1b1b; color:#fff; font-size:18px; }
+  @media (max-width: 520px) {
+    .controls { display:flex; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="row">
-    <span class="pill">Controles: flechas ←↑→↓  ·  Pausa: Barra espaciadora</span>
+    <span class="pill">Velocidad: lenta (tick 220ms)</span>
     <button id="btnReset">Reiniciar</button>
     <span class="pill">Puntaje: <b id="score">0</b></span>
   </div>
   <canvas id="game" width="420" height="420"></canvas>
+
+  <!-- Controles táctiles opcionales (móvil) -->
+  <div class="controls">
+    <button class="ctrl" data-d="up">↑</button>
+    <button class="ctrl" data-d="left">←</button>
+    <button class="ctrl" data-d="down">↓</button>
+    <button class="ctrl" data-d="right">→</button>
+  </div>
 </div>
 
 <script>
@@ -47,7 +63,11 @@ html = """
     score = 0;
     scoreEl.textContent = score;
     playing = true;
-    tickMs = 120; // velocidad
+
+    // ====== VELOCIDAD LENTA ======
+    tickMs = 220; // más alto = más lento
+    // (sin aceleración al comer)
+
     placeApple();
     lastTick = performance.now();
     requestAnimationFrame(loop);
@@ -74,6 +94,17 @@ html = """
     else if (e.code === "Space") playing = !playing;
   });
 
+  // Controles táctiles
+  document.querySelectorAll(".ctrl").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const d = btn.dataset.d;
+      if (d==="up") setDir(0,-1);
+      if (d==="down") setDir(0,1);
+      if (d==="left") setDir(-1,0);
+      if (d==="right") setDir(1,0);
+    });
+  });
+
   btnReset.addEventListener("click", init);
 
   function loop(ts) {
@@ -96,8 +127,8 @@ html = """
     // Comer manzana
     if (head.x===apple.x && head.y===apple.y) {
       score += 1; scoreEl.textContent = score;
-      if (tickMs > 70) tickMs -= 2; // acelera un poco
       placeApple();
+      // SIN aceleración al comer
     } else {
       snake.pop();
     }
@@ -116,24 +147,29 @@ html = """
   }
 
   function draw() {
-    // Fondo cuadriculado leve
+    // Fondo
     ctx.fillStyle = "#111";
     ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    // Cuadrícula sutil
     ctx.strokeStyle = "rgba(255,255,255,0.06)";
     for (let i=0;i<=GRID;i++) {
       ctx.beginPath(); ctx.moveTo(i*CELL,0); ctx.lineTo(i*CELL,canvas.height); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(0,i*CELL); ctx.lineTo(canvas.width,i*CELL); ctx.stroke();
     }
+
     // Manzana
     ctx.fillStyle = "#e74c3c";
     ctx.fillRect(apple.x*CELL+2, apple.y*CELL+2, CELL-4, CELL-4);
+
     // Serpiente
     for (let i=0;i<snake.length;i++) {
       ctx.fillStyle = i===0 ? "#2ecc71" : "#27ae60";
       const s = snake[i];
       ctx.fillRect(s.x*CELL+2, s.y*CELL+2, CELL-4, CELL-4);
     }
-    // Pausa
+
+    // Pausa visual
     if (!playing) {
       ctx.fillStyle = "rgba(0,0,0,0.3)";
       ctx.fillRect(0,0,canvas.width,canvas.height);
@@ -147,5 +183,4 @@ html = """
 </html>
 """
 
-# Altura suficiente para que quepa todo el HTML
-components.html(html, height=520, scrolling=False)
+components.html(html, height=560, scrolling=False)
