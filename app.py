@@ -14,14 +14,10 @@ def _norm(x: str) -> str:
     x = unicodedata.normalize("NFD", x)
     return "".join(c for c in x if unicodedata.category(c) != "Mn").lower()
 
-def _clear_search():
-    st.session_state["q_nom"] = ""
-
 # ----------------------------
 # Datos (20 originales + 18 nuevos con Padrino simulado)
 # ----------------------------
 DATA = [
-    # --- 20 originales ---
     [1,  "Juan",      "Pérez",     "López",     "Alberto"],
     [2,  "María",     "Gómez",     "Hernández", "Alma"],
     [3,  "Luis",      "Ramírez",   "Castro",    "Edgar"],
@@ -42,8 +38,6 @@ DATA = [
     [18, "Adriana",   "Campos",    "Rangel",    "Edgar"],
     [19, "Fernando",  "Suárez",    "Valdez",    "Alberto"],
     [20, "Gabriela",  "Luna",      "Méndez",    "Alma"],
-
-    # --- 18 nuevos ---
     [21, "Alberto",   "Contreras", "", "Alberto"],
     [22, "Edgar",     "Sanchez",   "", "Alma"],
     [23, "Emilio",    "Urrecha",   "", "Edgar"],
@@ -76,23 +70,19 @@ if "padron" not in st.session_state:
 # ----------------------------
 # Buscador solo por nombre
 # ----------------------------
-col1, col2 = st.columns([3,1])
-q_nom = col1.text_input("Buscar por nombre", key="q_nom")
-col2.button("Limpiar", on_click=_clear_search)
+q_nom = st.text_input("Buscar por nombre", key="q_nom")
 
 # ----------------------------
 # Filtrado
 # ----------------------------
-padron_full = st.session_state.padron.copy()
-padron = padron_full.copy()
-
+padron = st.session_state.padron.copy()
 if q_nom:
     padron = padron[padron["Nombre"].apply(_norm).str.contains(_norm(q_nom))]
 
-min_chars = 1
-hay_busqueda_valida = len(q_nom) >= min_chars
-
-if hay_busqueda_valida:
+# ----------------------------
+# Mostrar resultados
+# ----------------------------
+if not padron.empty and q_nom:
     st.caption(f"Resultados: {len(padron)}")
     for id_, row in padron.iterrows():
         etiqueta = f"{row['Nombre']} {row['Apellido1']} {row['Apellido2']}".strip()
@@ -102,15 +92,3 @@ if hay_busqueda_valida:
             st.session_state.padron.at[id_, "Presente"] = chk
             st.session_state.padron.at[id_, "Hora"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S") if chk else ""
             st.rerun()
-else:
-    st.info(f"Escribe al menos {min_chars} letra del nombre para buscar.")
-
-# ----------------------------
-# Exportar CSV
-# ----------------------------
-st.download_button(
-    "💾 Descargar lista",
-    st.session_state.padron.reset_index().to_csv(index=False).encode("utf-8"),
-    file_name="toma_lista.csv",
-    mime="text/csv",
-)
