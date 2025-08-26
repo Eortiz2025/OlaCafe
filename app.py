@@ -10,38 +10,68 @@ def _norm(x):
     x = unicodedata.normalize("NFD", x)
     return "".join(c for c in x if unicodedata.category(c) != "Mn").lower()
 
-if "padron" not in st.session_state:
-    st.session_state.padron = pd.DataFrame()
+# ----------------------------
+# Padrón precargado (20 nombres)
+# ----------------------------
+data = [
+    ["Juan", "Pérez", "López"],
+    ["María", "Gómez", "Hernández"],
+    ["Luis", "Ramírez", "Castro"],
+    ["Ana", "Torres", "Martínez"],
+    ["Carlos", "Fernández", "Ruiz"],
+    ["Sofía", "Rodríguez", "García"],
+    ["Miguel", "Hernández", "Santos"],
+    ["Lucía", "Vargas", "Morales"],
+    ["José", "Díaz", "Ramos"],
+    ["Carmen", "Ortiz", "Delgado"],
+    ["Pedro", "Navarro", "Aguilar"],
+    ["Elena", "Mendoza", "Romero"],
+    ["Jorge", "Flores", "Reyes"],
+    ["Patricia", "Serrano", "Acosta"],
+    ["Andrés", "Guerrero", "Silva"],
+    ["Isabel", "Cruz", "Salazar"],
+    ["Hugo", "Molina", "Paredes"],
+    ["Adriana", "Campos", "Rangel"],
+    ["Fernando", "Suárez", "Valdez"],
+    ["Gabriela", "Luna", "Méndez"],
+]
 
-archivo = st.file_uploader("CSV (columnas: Nombre, Apellido)", type=["csv"])
-if archivo:
-    df = pd.read_csv(archivo, dtype=str).fillna("")
-    if not {"Nombre", "Apellido"}.issubset(df.columns):
-        st.error("El CSV debe tener columnas: Nombre y Apellido.")
-        st.stop()
-    if "Presente" not in df.columns:
-        df["Presente"] = False
-    st.session_state.padron = df
+df = pd.DataFrame(data, columns=["Nombre", "Apellido1", "Apellido2"])
+df["Presente"] = False
+st.session_state.padron = df
 
-if st.session_state.padron.empty:
-    st.info("Sube el CSV para comenzar.")
-    st.stop()
-
-c1, c2 = st.columns(2)
+# ----------------------------
+# Buscador
+# ----------------------------
+c1, c2, c3 = st.columns(3)
 q_nom = c1.text_input("Buscar nombre")
-q_ape = c2.text_input("Buscar apellido")
+q_ap1 = c2.text_input("Buscar primer apellido")
+q_ap2 = c3.text_input("Buscar segundo apellido")
 
 padron = st.session_state.padron.copy()
 if q_nom:
     padron = padron[padron["Nombre"].apply(_norm).str.contains(_norm(q_nom))]
-if q_ape:
-    padron = padron[padron["Apellido"].apply(_norm).str.contains(_norm(q_ape))]
+if q_ap1:
+    padron = padron[padron["Apellido1"].apply(_norm).str.contains(_norm(q_ap1))]
+if q_ap2:
+    padron = padron[padron["Apellido2"].apply(_norm).str.contains(_norm(q_ap2))]
 
 st.write(f"Resultados: {len(padron)}")
+
+# ----------------------------
+# Lista con checkboxes
+# ----------------------------
 for i, row in padron.iterrows():
-    chk = st.checkbox(f"{row['Nombre']} {row['Apellido']}", value=bool(row["Presente"]), key=f"p_{i}")
+    label = f"{row['Nombre']} {row['Apellido1']} {row['Apellido2']}"
+    chk = st.checkbox(label, value=bool(row["Presente"]), key=f"p_{i}")
     st.session_state.padron.at[i, "Presente"] = chk
 
-st.download_button("💾 Descargar lista", st.session_state.padron.to_csv(index=False).encode("utf-8"),
-                   file_name="toma_lista.csv", mime="text/csv")
-
+# ----------------------------
+# Exportar lista
+# ----------------------------
+st.download_button(
+    "💾 Descargar lista",
+    st.session_state.padron.to_csv(index=False).encode("utf-8"),
+    file_name="toma_lista.csv",
+    mime="text/csv",
+)
