@@ -36,9 +36,10 @@ data = [
     ["Gabriela", "Luna", "Méndez"],
 ]
 
-df = pd.DataFrame(data, columns=["Nombre", "Apellido1", "Apellido2"])
-df["Presente"] = False
-st.session_state.padron = df
+if "padron" not in st.session_state:
+    df = pd.DataFrame(data, columns=["Nombre", "Apellido1", "Apellido2"])
+    df["Presente"] = False
+    st.session_state.padron = df
 
 # ----------------------------
 # Buscador
@@ -59,12 +60,14 @@ if q_ap2:
 st.write(f"Resultados: {len(padron)}")
 
 # ----------------------------
-# Lista con checkboxes
+# Lista con checkboxes (con reload)
 # ----------------------------
 for i, row in padron.iterrows():
     label = f"{row['Nombre']} {row['Apellido1']} {row['Apellido2']}"
     chk = st.checkbox(label, value=bool(row["Presente"]), key=f"p_{i}")
-    st.session_state.padron.at[i, "Presente"] = chk
+    if chk != row["Presente"]:
+        st.session_state.padron.at[i, "Presente"] = chk
+        st.rerun()   # 🔄 Recarga la app para mostrar todo otra vez
 
 # ----------------------------
 # Exportar lista
