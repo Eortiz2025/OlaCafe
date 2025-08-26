@@ -3,9 +3,6 @@ import pandas as pd
 import unicodedata
 from datetime import datetime
 
-# ----------------------------
-# Configuración
-# ----------------------------
 st.set_page_config(page_title="Toma de lista", page_icon="🗳️", layout="centered")
 st.title("🗳️ Toma de lista")
 
@@ -13,22 +10,18 @@ st.title("🗳️ Toma de lista")
 # Utilidades
 # ----------------------------
 def _norm(x: str) -> str:
-    """Quita acentos y pasa a minúsculas para comparar."""
     x = "" if x is None else str(x)
     x = unicodedata.normalize("NFD", x)
     return "".join(c for c in x if unicodedata.category(c) != "Mn").lower()
 
 def _clear_search():
-    # Callback para limpiar campos sin chocar con el ciclo de ejecución
     st.session_state["q_nom"] = ""
-    st.session_state["q_ap1"] = ""
-    st.session_state["q_ap2"] = ""
 
 # ----------------------------
-# Datos precargados (20)
-# ID, Nombre, Apellido1, Apellido2, Padrino
+# Datos (20 originales + 18 nuevos con Padrino simulado)
 # ----------------------------
-DATA20 = [
+DATA = [
+    # --- 20 originales ---
     [1,  "Juan",      "Pérez",     "López",     "Alberto"],
     [2,  "María",     "Gómez",     "Hernández", "Alma"],
     [3,  "Luis",      "Ramírez",   "Castro",    "Edgar"],
@@ -49,54 +42,68 @@ DATA20 = [
     [18, "Adriana",   "Campos",    "Rangel",    "Edgar"],
     [19, "Fernando",  "Suárez",    "Valdez",    "Alberto"],
     [20, "Gabriela",  "Luna",      "Méndez",    "Alma"],
+
+    # --- 18 nuevos ---
+    [21, "Alberto",   "Contreras", "", "Alberto"],
+    [22, "Edgar",     "Sanchez",   "", "Alma"],
+    [23, "Emilio",    "Urrecha",   "", "Edgar"],
+    [24, "Javier",    "Osorio",    "", "Alberto"],
+    [25, "Juan",      "Gonzalez",  "", "Alma"],
+    [26, "Miguel",    "Ontiveros", "", "Edgar"],
+    [27, "Noe",       "Silvas",    "", "Alberto"],
+    [28, "Raul",      "Valdez",    "", "Alma"],
+    [29, "Sergio",    "Galvan",    "", "Edgar"],
+    [30, "Alma",      "Morgan",    "", "Alberto"],
+    [31, "Cata",      "Frank",     "", "Alma"],
+    [32, "Claudia",   "Sing",      "", "Edgar"],
+    [33, "Minerva",   "Salomon",   "", "Alberto"],
+    [34, "Karen",     "Garcia",    "", "Alma"],
+    [35, "Laura",     "Contreras", "", "Edgar"],
+    [36, "Marcela",   "Landel",    "", "Alberto"],
+    [37, "Olga",      "Escamilla", "", "Alma"],
+    [38, "Vanessa",   "Sanchez",   "", "Edgar"],
 ]
 
 # ----------------------------
-# Estado inicial (persistencia en sesión)
+# Estado inicial
 # ----------------------------
 if "padron" not in st.session_state:
-    df = pd.DataFrame(DATA20, columns=["ID", "Nombre", "Apellido1", "Apellido2", "Padrino"])
+    df = pd.DataFrame(DATA, columns=["ID", "Nombre", "Apellido1", "Apellido2", "Padrino"])
     df["Presente"] = False
     df["Hora"] = ""
-    st.session_state.padron = df.set_index("ID")  # índice estable por ID
+    st.session_state.padron = df.set_index("ID")
 
 # ----------------------------
-# Buscador (en vivo)
+# Buscador solo por nombre
 # ----------------------------
-c1, c2, c3, c4 = st.columns([2,2,2,1])
-q_nom = c1.text_input("Nombre", key="q_nom")
-q_ap1 = c2.text_input("Primer apellido", key="q_ap1")
-q_ap2 = c3.text_input("Segundo apellido", key="q_ap2")
-c4.button("Limpiar", on_click=_clear_search)
+col1, col2 = st.columns([3,1])
+q_nom = col1.text_input("Buscar por nombre", key="q_nom")
+col2.button("Limpiar", on_click=_clear_search)
 
 # ----------------------------
-# Filtrado (base oculta hasta que haya búsqueda)
+# Filtrado
 # ----------------------------
 padron_full = st.session_state.padron.copy()
 padron = padron_full.copy()
 
 if q_nom:
     padron = padron[padron["Nombre"].apply(_norm).str.contains(_norm(q_nom))]
-if q_ap1:
-    padron = padron[padron["Apellido1"].apply(_norm).str.contains(_norm(q_ap1))]
-if q_ap2:
-    padron = padron[padron["Apellido2"].apply(_norm).str.contains(_norm(q_ap2))]
 
 min_chars = 1
-hay_busqueda_valida = any(len(q) >= min_chars for q in [q_nom, q_ap1, q_ap2])
+hay_busqueda_valida = len(q_nom) >= min_chars
 
 if hay_busqueda_valida:
     st.caption(f"Resultados: {len(padron)}")
-    # Render de checkboxes (con reload y persistencia)
     for id_, row in padron.iterrows():
-        etiqueta = f"{row['Nombre']} {row['Apellido1']} {row['Apellido2']} — [{row['Padrino']}]"
+        etiqueta = f"{row['Nombre']} {row['Apellido1']} {row['Apellido2']}".strip()
+        etiqueta = etiqueta if row["Padrino"] == "" else f"{etiqueta} — [{row['Padrino']}]"
         chk = st.checkbox(etiqueta, value=bool(row["Presente"]), key=f"p_{id_}")
         if chk != row["Presente"]:
             st.session_state.padron.at[id_, "Presente"] = chk
             st.session_state.padron.at[id_, "Hora"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S") if chk else ""
             st.rerun()
 else:
-    st.info(f"Escribe al menos {min_chars} letra en Nombre o Apellidos para buscar.")
+    st.info(f"Escribe al menos {min_chars} letra del nombre para buscar.")
 
 # ----------------------------
 # Exportar CSV
