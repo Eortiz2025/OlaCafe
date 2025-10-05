@@ -1,94 +1,109 @@
-import streamlit as st
 import pandas as pd
-import unicodedata
-from datetime import datetime
+import numpy as np
+import streamlit as st
+import io
 
-st.set_page_config(page_title="Toma de lista", page_icon="🗳️", layout="centered")
-st.title("🗳️ Toma de lista")
+st.set_page_config(page_title="Agente Temporada", page_icon="💼")
+st.title("💼 Agente Temporada")
 
-# ----------------------------
-# Utilidades
-# ----------------------------
-def _norm(x: str) -> str:
-    x = "" if x is None else str(x)
-    x = unicodedata.normalize("NFD", x)
-    return "".join(c for c in x if unicodedata.category(c) != "Mn").lower()
+archivo = st.file_uploader("🗂️ Sube el archivo exportado desde Erply (.xls)", type=["xls"])
 
-# ----------------------------
-# Datos (20 originales + 18 nuevos con Padrino simulado)
-# ----------------------------
-DATA = [
-    [1,  "Juan",      "Pérez",     "López",     "Alberto"],
-    [2,  "María",     "Gómez",     "Hernández", "Alma"],
-    [3,  "Luis",      "Ramírez",   "Castro",    "Edgar"],
-    [4,  "Ana",       "Torres",    "Martínez",  "Alberto"],
-    [5,  "Carlos",    "Fernández", "Ruiz",      "Alma"],
-    [6,  "Sofía",     "Rodríguez", "García",    "Edgar"],
-    [7,  "Miguel",    "Hernández", "Santos",    "Alberto"],
-    [8,  "Lucía",     "Vargas",    "Morales",   "Alma"],
-    [9,  "José",      "Díaz",      "Ramos",     "Edgar"],
-    [10, "Carmen",    "Ortiz",     "Delgado",   "Alberto"],
-    [11, "Pedro",     "Navarro",   "Aguilar",   "Alma"],
-    [12, "Elena",     "Mendoza",   "Romero",    "Edgar"],
-    [13, "Jorge",     "Flores",    "Reyes",     "Alberto"],
-    [14, "Patricia",  "Serrano",   "Acosta",    "Alma"],
-    [15, "Andrés",    "Guerrero",  "Silva",     "Edgar"],
-    [16, "Isabel",    "Cruz",      "Salazar",   "Alberto"],
-    [17, "Hugo",      "Molina",    "Paredes",   "Alma"],
-    [18, "Adriana",   "Campos",    "Rangel",    "Edgar"],
-    [19, "Fernando",  "Suárez",    "Valdez",    "Alberto"],
-    [20, "Gabriela",  "Luna",      "Méndez",    "Alma"],
-    [21, "Alberto",   "Contreras", "", "Alberto"],
-    [22, "Edgar",     "Sanchez",   "", "Alma"],
-    [23, "Emilio",    "Urrecha",   "", "Edgar"],
-    [24, "Javier",    "Osorio",    "", "Alberto"],
-    [25, "Juan",      "Gonzalez",  "", "Alma"],
-    [26, "Miguel",    "Ontiveros", "", "Edgar"],
-    [27, "Noe",       "Silvas",    "", "Alberto"],
-    [28, "Raul",      "Valdez",    "", "Alma"],
-    [29, "Sergio",    "Galvan",    "", "Edgar"],
-    [30, "Alma",      "Morgan",    "", "Alberto"],
-    [31, "Cata",      "Frank",     "", "Alma"],
-    [32, "Claudia",   "Sing",      "", "Edgar"],
-    [33, "Minerva",   "Salomon",   "", "Alberto"],
-    [34, "Karen",     "Garcia",    "", "Alma"],
-    [35, "Laura",     "Contreras", "", "Edgar"],
-    [36, "Marcela",   "Landel",    "", "Alberto"],
-    [37, "Olga",      "Escamilla", "", "Alma"],
-    [38, "Vanessa",   "Sanchez",   "", "Edgar"],
-]
+if archivo:
+    try:
+        tabla = pd.read_html(archivo, header=3)[0]
+        if tabla.columns[0] in ("", "Unnamed: 0", "No", "Moneda"):
+            tabla = tabla.iloc[:, 1:]
 
-# ----------------------------
-# Estado inicial
-# ----------------------------
-if "padron" not in st.session_state:
-    df = pd.DataFrame(DATA, columns=["ID", "Nombre", "Apellido1", "Apellido2", "Padrino"])
-    df["Presente"] = False
-    df["Hora"] = ""
-    st.session_state.padron = df.set_index("ID")
+        columnas_deseadas = [
+            "Código", "Código EAN", "Nombre",
+            "Stock (total)", "Stock (apartado)", "Stock (disponible)",
+            "Proveedor", "Cantidad vendida", "Ventas netas totales ($)",
+            "Cantidad vendida (2)", "Ventas netas totales ($) (2)"
+        ]
 
-# ----------------------------
-# Buscador solo por nombre
-# ----------------------------
-q_nom = st.text_input("Buscar por nombre", key="q_nom")
+        if len(tabla.columns) >= len(columnas_deseadas):
+            tabla.columns = columnas_deseadas[:len(tabla.columns)]
+        else:
+            st.error("❌ El archivo no tiene suficientes columnas.")
+            st.stop()
 
-# ----------------------------
-# Filtrado
-# ----------------------------
-padron = st.session_state.padron.copy()
-if q_nom:
-    padron = padron[padron["Nombre"].apply(_norm).str.contains(_norm(q_nom))]
+        tabla = tabla.drop(columns=[
+            "Ventas netas totales ($)", "Stock (apartado)", "Stock (disponible)",
+            "Ventas netas totales ($) (2)"
+        ], errors="ignore")
 
-# ----------------------------
-# Mostrar resultados
-# ----------------------------
-if not padron.empty and q_nom:
-    st.caption(f"Resultados: {len(padron)}")
-    for id_, row in padron.iterrows():
-        etiqueta = f"{row['Nombre']} {row['Apellido1']} {row['Apellido2']}".strip()
-        etiqueta = etiqueta if row["Padrino"] == "" else f"{etiqueta} — [{row['Padrino']}]"
-        chk = st.checkbox(etiqueta, value=bool(row["Presente"]), key=f"p_{id_}")
-        if chk != row["Presente"]:
-            st.session_state.padron.at[id_, "Presente"] = chk
-            st.session_state.padron.at[id_, "Hora"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S") if chk else ""
-            st.rerun()
+        tabla = tabla.rename(columns={
+            "Stock (total)": "Stock",
+            "Cantidad vendida": "V30D 25",
+            "Cantidad vendida (2)": "V30D 24"
+        })
+
+        tabla = tabla[tabla["Proveedor"].notna()]
+        tabla = tabla[tabla["Proveedor"].astype(str).str.strip() != ""]
+
+        calcular_proveedor = st.checkbox("¿Deseas calcular sólo un proveedor?", value=False)
+
+        if calcular_proveedor:
+            lista_proveedores = tabla["Proveedor"].dropna().unique()
+            proveedor_seleccionado = st.selectbox("Selecciona el proveedor a calcular:", sorted(lista_proveedores))
+            tabla = tabla[tabla["Proveedor"] == proveedor_seleccionado]
+
+        tabla["V30D 25"] = pd.to_numeric(tabla["V30D 25"], errors="coerce").fillna(0).round()
+        tabla["V30D 24"] = pd.to_numeric(tabla["V30D 24"], errors="coerce").fillna(0).round()
+        tabla["Stock"] = pd.to_numeric(tabla["Stock"], errors="coerce").fillna(0).round()
+
+        tabla["Max"] = tabla[["V30D 25", "V30D 24"]].max(axis=1)
+
+        # Redondear la compra hacia arriba al múltiplo de 5
+        tabla["Compra"] = np.ceil((tabla["Max"] - tabla["Stock"]).clip(lower=0) / 5) * 5
+
+        tabla = tabla[tabla["Compra"] > 0].sort_values("Nombre")
+
+        mostrar_proveedor = st.checkbox("¿Mostrar Proveedor?", value=False)
+
+        if mostrar_proveedor:
+            columnas_finales = [
+                "Código", "Código EAN", "Nombre", "Proveedor", "Stock",
+                "V30D 25", "V30D 24", "Max", "Compra"
+            ]
+        else:
+            tabla = tabla.drop(columns=["Proveedor"])
+            columnas_finales = [
+                "Código", "Código EAN", "Nombre", "Stock",
+                "V30D 25", "V30D 24", "Max", "Compra"
+            ]
+
+        tabla = tabla[columnas_finales]
+
+        st.success("✅ Archivo procesado correctamente")
+        st.dataframe(tabla)
+
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            tabla.to_excel(writer, index=False, sheet_name='Compra del día')
+            worksheet = writer.sheets['Compra del día']
+            worksheet.freeze_panes = worksheet['A2']
+
+        processed_data = output.getvalue()
+
+        st.download_button(
+            label="📄 Descargar Excel",
+            data=processed_data,
+            file_name="Compra del día.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+        st.subheader("🔥 Top 10 productos donde V30D 24 supera V30D 25")
+
+        productos_calientes = tabla[tabla["V30D 24"] > tabla["V30D 25"]]
+
+        if not productos_calientes.empty:
+            productos_calientes = productos_calientes.sort_values("Nombre", ascending=True)
+            top_productos = productos_calientes.head(10)
+            columnas_a_mostrar = ["Código", "Nombre", "V30D 25", "V30D 24"]
+            st.dataframe(top_productos[columnas_a_mostrar])
+        else:
+            st.info("✅ No hay productos donde V30D del año pasado supere al actual.")
+
+    except Exception as e:
+        st.error(f"❌ Error al procesar el archivo: {e}")
