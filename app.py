@@ -12,7 +12,6 @@ def cargar_historial():
     if os.path.exists(CSV_FILE):
         df = pd.read_csv(CSV_FILE, parse_dates=["fecha_hora"])
         df["fecha"] = df["fecha_hora"].dt.date
-        # Compatibilidad por si no existiera columna notas
         if "notas" not in df.columns:
             df["notas"] = ""
         return df
@@ -33,6 +32,15 @@ def guardar_sesion(duracion_min):
     df = pd.concat([df, nueva], ignore_index=True)
     df.to_csv(CSV_FILE, index=False)
 
+# ---------- Sonido de gong ----------
+def reproducir_gong():
+    try:
+        with open("gong.mp3", "rb") as f:
+            data = f.read()
+        st.audio(data, format="audio/mp3")
+    except FileNotFoundError:
+        st.warning("⚠️ No se encontró gong.mp3 en la carpeta de la app.")
+
 # ---------- App ----------
 st.set_page_config(page_title="Meditación", page_icon="🧘", layout="centered")
 st.title("🧘 Temporizador de Meditación")
@@ -40,7 +48,8 @@ st.caption("Temporizador + historial mensual con días meditados en verde.")
 
 historial = cargar_historial()
 
-st.subheader("1️⃣ Configura tu sesión")
+# --------- Configuración de sesión ----------
+st.subheader("⏱️ ¿Cuánto tiempo quieres meditar hoy?")
 duracion_min = st.number_input(
     "Duración (minutos)", min_value=1, max_value=120, value=15, step=1
 )
@@ -56,7 +65,8 @@ with col2:
 # ---------- Registrar sin temporizador ----------
 if registrar_manual:
     guardar_sesion(duracion_min)
-    st.success(f"Sesión de {duracion_min} min registrada manualmente.")
+    reproducir_gong()
+    st.success(f"Sesión de {duracion_min} min registrada manualmente. 🙏")
 
 # ---------- Temporizador ----------
 if "en_curso" not in st.session_state:
@@ -82,6 +92,7 @@ if st.session_state.en_curso:
 
     st.session_state.en_curso = False
     guardar_sesion(duracion_min)
+    reproducir_gong()
     st.success(f"Sesión completada y guardada ({duracion_min} min). 🙏")
 
 # ---------- Historial ----------
@@ -95,9 +106,7 @@ else:
     year = hoy.year
     month = hoy.month
 
-    # Fechas en las que se meditó (set de date)
     fechas_meditadas = set(historial["fecha"].unique())
-
     cal_mes = calendar.monthcalendar(year, month)
     dias_semana = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
 
