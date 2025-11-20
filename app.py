@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime, date
 import time
 import os
+import calendar
 
 CSV_FILE = "historial_meditacion.csv"
 
@@ -11,18 +12,21 @@ def cargar_historial():
     if os.path.exists(CSV_FILE):
         df = pd.read_csv(CSV_FILE, parse_dates=["fecha_hora"])
         df["fecha"] = df["fecha_hora"].dt.date
+        # Compatibilidad por si no existiera columna notas
+        if "notas" not in df.columns:
+            df["notas"] = ""
         return df
     else:
         return pd.DataFrame(columns=["fecha_hora", "duracion_min", "notas", "fecha"])
 
-def guardar_sesion(duracion_min, notas=""):
+def guardar_sesion(duracion_min):
     df = cargar_historial()
     ahora = datetime.now()
     nueva = pd.DataFrame(
         {
             "fecha_hora": [ahora],
             "duracion_min": [duracion_min],
-            "notas": [notas],
+            "notas": [""],
             "fecha": [ahora.date()],
         }
     )
@@ -32,15 +36,14 @@ def guardar_sesion(duracion_min, notas=""):
 # ---------- App ----------
 st.set_page_config(page_title="Meditación", page_icon="🧘", layout="centered")
 st.title("🧘 Temporizador de Meditación")
-st.caption("Temporizador + historial de días y número de sesiones.")
+st.caption("Temporizador + historial mensual con días meditados en verde.")
 
 historial = cargar_historial()
 
 st.subheader("1️⃣ Configura tu sesión")
 duracion_min = st.number_input(
-    "Duración (minutos)", min_value=1, max_value=120, value=10, step=1
+    "Duración (minutos)", min_value=1, max_value=120, value=15, step=1
 )
-notas = st.text_input("Notas (opcional)", placeholder="Meditación de la mañana, etc.")
 
 col1, col2 = st.columns(2)
 
@@ -52,7 +55,7 @@ with col2:
 
 # ---------- Registrar sin temporizador ----------
 if registrar_manual:
-    guardar_sesion(duracion_min, notas)
+    guardar_sesion(duracion_min)
     st.success(f"Sesión de {duracion_min} min registrada manualmente.")
 
 # ---------- Temporizador ----------
@@ -76,8 +79,9 @@ if st.session_state.en_curso:
             unsafe_allow_html=True,
         )
         time.sleep(1)
+
     st.session_state.en_curso = False
-    guardar_sesion(duracion_min, notas)
+    guardar_sesion(duracion_min)
     st.success(f"Sesión completada y guardada ({duracion_min} min). 🙏")
 
 # ---------- Historial ----------
@@ -86,7 +90,50 @@ st.subheader("2️⃣ Historial de meditaciones")
 if historial.empty:
     st.info("Todavía no hay sesiones registradas.")
 else:
-    # Resumen por día
+    # ---- Calendario mensual actual ----
+    hoy = date.today()
+    year = hoy.year
+    month = hoy.month
+
+    # Fechas en las que se meditó (set de date)
+    fechas_meditadas = set(historial["fecha"].unique())
+
+    cal_mes = calendar.monthcalendar(year, month)
+    dias_semana = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
+
+    tabla_html = "<table style='border-collapse: collapse; width: 100%; text-align: center;'>"
+
+    # Encabezado
+    tabla_html += "<tr>"
+    for d in dias_semana:
+        tabla_html += f"<th style='border:1px solid #ddd; padding:4px;'>{d}</th>"
+    tabla_html += "</tr>"
+
+    # Filas de semanas
+    for semana in cal_mes:
+        tabla_html += "<tr>"
+        for dia in semana:
+            if dia == 0:
+                tabla_html += "<td style='border:1px solid #ddd; padding:4px;'>&nbsp;</td>"
+            else:
+                fecha_dia = date(year, month, dia)
+                if fecha_dia in fechas_meditadas:
+                    bg = "#b6fcb6"  # verde suave
+                else:
+                    bg = "#f5f5f5"  # gris claro
+
+                tabla_html += (
+                    f"<td style='border:1px solid #ddd; padding:4px; "
+                    f"background-color:{bg};'>{dia}</td>"
+                )
+        tabla_html += "</tr>"
+
+    tabla_html += "</table>"
+
+    st.markdown("**Calendario del mes actual** (verde = hubo meditación)")
+    st.markdown(tabla_html, unsafe_allow_html=True)
+
+    # ---- Resumen por día ----
     resumen = (
         historial.groupby("fecha")
         .agg(
