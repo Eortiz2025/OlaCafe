@@ -1,163 +1,147 @@
-import streamlit as st
 import pandas as pd
-from datetime import datetime, date
-import time
-import os
-import calendar
+import numpy as np
+import streamlit as st
+import io
+import re
+import math
 
-CSV_FILE = "historial_meditacion.csv"
+st.set_page_config(page_title="Agente de Compras", page_icon="💼", layout="wide")
+st.title("💼 Agente de Compras")
+st.caption("Compra basada en el mayor valor entre V30D y V365.")
 
-# ---------- Utilidades de historial ----------
-def cargar_historial():
-    if os.path.exists(CSV_FILE):
-        df = pd.read_csv(CSV_FILE, parse_dates=["fecha_hora"])
-        df["fecha"] = df["fecha_hora"].dt.date
-        if "notas" not in df.columns:
-            df["notas"] = ""
-        return df
-    else:
-        return pd.DataFrame(columns=["fecha_hora", "duracion_min", "notas", "fecha"])
+# -------- Utilidades --------
+def _to_num(s):
+    return pd.to_numeric(s, errors="coerce").fillna(0)
 
-def guardar_sesion(duracion_min):
-    df = cargar_historial()
-    ahora = datetime.now()
-    nueva = pd.DataFrame(
-        {
-            "fecha_hora": [ahora],
-            "duracion_min": [duracion_min],
-            "notas": [""],
-            "fecha": [ahora.date()],
-        }
-    )
-    df = pd.concat([df, nueva], ignore_index=True)
-    df.to_csv(CSV_FILE, index=False)
+def _detect_data_start(df):
+    """Primera fila donde col1 parece código y col3 es nombre de producto."""
+    def is_code(x):
+        s = str(x).strip()
+        return bool(re.match(r"^[A-Za-z0-9\\-]+$", s)) and len(s) >= 3 and "codigo" not in s.lower()
+    for i in range(min(60, len(df))):
+        c1 = df.iloc[i, 1] if df.shape[1] > 1 else None
+        c3 = df.iloc[i, 3] if df.shape[1] > 3 else None
+        if is_code(c1) and isinstance(c3, str) and len(str(c3).strip()) > 2 and "nombre" not in str(c3).lower():
+            return i
+    return 0
 
-# ---------- Sonido de gong ----------
-def reproducir_gong():
-    try:
-        with open("gong.mp3", "rb") as f:
-            data = f.read()
-        st.audio(data, format="audio/mp3")
-    except FileNotFoundError:
-        st.warning("⚠️ No se encontró gong.mp3 en la carpeta de la app.")
+def _read_erply_xls_like_html(file_obj):
+    """Lee el .xls (HTML) de Erply por posición."""
+    file_obj.seek(0)
+    df0 = pd.read_html(file_obj, header=None)[0]
+    start = _detect_data_start(df0)
+    df = df0.iloc[start:, :12].copy()
+    df.columns = [
+        "No", "Código", "Código EAN", "Nombre",
+        "Stock (total)", "Stock (apartado)", "Stock (disponible)",
+        "Proveedor",
+        "V30D", "Ventas corto ($)",
+        "V365", "Ventas 365 ($)"
+    ]
+    return df.dropna(how="all").reset_index(drop=True)
 
-# ---------- App ----------
-st.set_page_config(page_title="Meditación", page_icon="🧘", layout="centered")
-st.title("🧘 Temporizador de Meditación")
-st.caption("Temporizador + historial mensual con días meditados en verde.")
+def _norm_str(x):
+    if pd.isna(x):
+        return ""
+    return str(x).strip().lower()
 
-historial = cargar_historial()
+MISSING_PROV_TOKENS = {"", "nan", "none", "null", "s/n", "sin proveedor", "na"}
 
-# --------- Configuración de sesión ----------
-st.subheader("⏱️ ¿Cuánto tiempo quieres meditar hoy?")
-duracion_min = st.number_input(
-    "Duración (minutos)", min_value=1, max_value=120, value=15, step=1
-)
+# -------- Entradas --------
+archivo = st.file_uploader("🗂️ Sube el archivo exportado desde Erply (.xls)", type=["xls"])
 
-col1, col2 = st.columns(2)
+colf = st.columns(3)
+with colf[0]:
+    proveedor_unico = st.checkbox("Filtrar por proveedor específico", value=False)
+with colf[1]:
+    mostrar_proveedor = st.checkbox("Mostrar Proveedor en resultados", value=False)
+with colf[2]:
+    solo_stock_cero = st.checkbox("Solo Stock = 0", value=False)
+solo_con_ventas_365 = st.checkbox("Solo con ventas en 365 días (>0)", value=False)
 
-with col1:
-    iniciar = st.button("▶ Iniciar meditación")
+if not archivo:
+    st.info("Sube el archivo para continuar.")
+    st.stop()
 
-with col2:
-    registrar_manual = st.button("✅ Registrar sesión sin temporizador")
+# -------- Proceso --------
+try:
+    tabla = _read_erply_xls_like_html(archivo)
 
-# ---------- Registrar sin temporizador ----------
-if registrar_manual:
-    guardar_sesion(duracion_min)
-    reproducir_gong()
-    st.success(f"Sesión de {duracion_min} min registrada manualmente. 🙏")
+    # --- EXCLUSIÓN de descontinuados: proveedor vacío o equivalente ---
+    tabla["Proveedor_raw"] = tabla["Proveedor"]
+    tabla["Proveedor_norm"] = tabla["Proveedor_raw"].apply(_norm_str)
+    excl_mask = tabla["Proveedor_norm"].isin(MISSING_PROV_TOKENS)
+    excluidos = int(excl_mask.sum())
+    tabla = tabla.loc[~excl_mask].copy()  # excluir definitivamente
+    # ------------------------------------------------------------------
 
-# ---------- Temporizador ----------
-if "en_curso" not in st.session_state:
-    st.session_state.en_curso = False
+    # Filtrado básico (ya sin descontinuados)
+    tabla = tabla[tabla["Proveedor"].astype(str).str.strip().ne("")]
 
-if iniciar:
-    st.session_state.en_curso = True
-
-if st.session_state.en_curso:
-    st.subheader("⏳ Temporizador en curso")
-    placeholder = st.empty()
-
-    total_segundos = int(duracion_min * 60)
-
-    for restante in range(total_segundos, -1, -1):
-        minutos = restante // 60
-        segundos = restante % 60
-        placeholder.markdown(
-            f"## ⏰ {minutos:02d}:{segundos:02d} restantes",
-            unsafe_allow_html=True,
+    if proveedor_unico:
+        # Catálogo de proveedores válidos (sin tokens vacíos)
+        provs = sorted(
+            p for p in tabla["Proveedor"].dropna().astype(str).str.strip().unique()
+            if _norm_str(p) not in MISSING_PROV_TOKENS
         )
-        time.sleep(1)
+        proveedor_sel = st.selectbox("Proveedor:", provs)
+        tabla = tabla[tabla["Proveedor"].astype(str).str.strip() == proveedor_sel]
 
-    st.session_state.en_curso = False
-    guardar_sesion(duracion_min)
-    reproducir_gong()
-    st.success(f"Sesión completada y guardada ({duracion_min} min). 🙏")
+    # Tipificación
+    tabla["Stock"] = _to_num(tabla["Stock (total)"]).round()
+    tabla["V30D"]  = _to_num(tabla["V30D"]).round()
+    tabla["V365"]  = _to_num(tabla["V365"]).round()
 
-# ---------- Historial ----------
-st.subheader("2️⃣ Historial de meditaciones")
+    if solo_stock_cero:
+        tabla = tabla[tabla["Stock"].eq(0)]
+    if solo_con_ventas_365:
+        tabla = tabla[tabla["V365"] > 0]
 
-if historial.empty:
-    st.info("Todavía no hay sesiones registradas.")
-else:
-    # ---- Calendario mensual actual ----
-    hoy = date.today()
-    year = hoy.year
-    month = hoy.month
+    # -------- NUEVA LÓGICA DE COMPRA --------
+    # BaseVenta = mayor entre V30D y V365
+    tabla["BaseVenta"] = tabla[["V30D", "V365"]].max(axis=1)
 
-    fechas_meditadas = set(historial["fecha"].unique())
-    cal_mes = calendar.monthcalendar(year, month)
-    dias_semana = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
+    # Max = BaseVenta (entera)
+    tabla["Max"] = tabla["BaseVenta"].round().astype(int)
 
-    tabla_html = "<table style='border-collapse: collapse; width: 100%; text-align: center;'>"
+    # Compra = (Max - Stock), redondeada al múltiplo de 5 hacia arriba
+    compra_raw = (tabla["Max"] - tabla["Stock"]).clip(lower=0)
+    tabla["Compra"] = compra_raw.apply(lambda x: int(math.ceil(x/5.0)*5) if x > 0 else 0)
+    # ----------------------------------------
 
-    # Encabezado
-    tabla_html += "<tr>"
-    for d in dias_semana:
-        tabla_html += f"<th style='border:1px solid #ddd; padding:4px;'>{d}</th>"
-    tabla_html += "</tr>"
+    # Salida: Compra → Stock → V30D → V365 → Max
+    cols = ["Código", "Nombre", "Compra", "Stock", "V30D", "V365", "Max"]
+    if "Código EAN" in tabla.columns:
+        cols.insert(1, "Código EAN")
+    if mostrar_proveedor:
+        cols.insert(3, "Proveedor")  # después de Compra
 
-    # Filas de semanas
-    for semana in cal_mes:
-        tabla_html += "<tr>"
-        for dia in semana:
-            if dia == 0:
-                tabla_html += "<td style='border:1px solid #ddd; padding:4px;'>&nbsp;</td>"
-            else:
-                fecha_dia = date(year, month, dia)
-                if fecha_dia in fechas_meditadas:
-                    bg = "#b6fcb6"  # verde suave
-                else:
-                    bg = "#f5f5f5"  # gris claro
+    final = (tabla[tabla["Compra"] > 0]
+             .sort_values("Nombre", na_position="last"))[cols]
 
-                tabla_html += (
-                    f"<td style='border:1px solid #ddd; padding:4px; "
-                    f"background-color:{bg};'>{dia}</td>"
-                )
-        tabla_html += "</tr>"
+    st.success("✅ Archivo procesado correctamente")
+    if excluidos > 0:
+        st.caption(f"🧹 Excluidos por proveedor vacío/descontinuado: {excluidos}")
 
-    tabla_html += "</table>"
+    st.dataframe(final, use_container_width=True, height=520)
 
-    st.markdown("**Calendario del mes actual** (verde = hubo meditación)")
-    st.markdown(tabla_html, unsafe_allow_html=True)
+    # Descarga Excel (.xlsx)
+    exp = final.copy()
+    for c in ["Stock", "V365", "V30D", "Max", "Compra"]:
+        if c in exp.columns:
+            exp[c] = pd.to_numeric(exp[c], errors="coerce").fillna(0).astype(int)
 
-    # ---- Resumen por día ----
-    resumen = (
-        historial.groupby("fecha")
-        .agg(
-            sesiones=("duracion_min", "count"),
-            minutos_totales=("duracion_min", "sum"),
-        )
-        .reset_index()
-        .sort_values("fecha", ascending=False)
+    out_xlsx = io.BytesIO()
+    with pd.ExcelWriter(out_xlsx, engine="openpyxl") as w:
+        exp.to_excel(w, index=False, sheet_name="Compra del día")
+        w.sheets["Compra del día"].freeze_panes = "A2"
+
+    st.download_button(
+        "📄 Descargar Excel (.xlsx)",
+        data=out_xlsx.getvalue(),
+        file_name="Compra del día.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
-    st.markdown("**Resumen por día**")
-    st.dataframe(resumen, use_container_width=True)
-
-    with st.expander("Ver historial detallado"):
-        st.dataframe(
-            historial.sort_values("fecha_hora", ascending=False),
-            use_container_width=True,
-        )
+except Exception as e:
+    st.error(f"❌ Error al procesar el archivo: {e}")
