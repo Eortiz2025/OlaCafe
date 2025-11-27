@@ -7,7 +7,7 @@ import math
 
 st.set_page_config(page_title="Agente de Compras", page_icon="💼", layout="wide")
 st.title("💼 Agente de Compras")
-st.caption("Compra basada en el mayor valor entre V30D y V365.")
+st.caption("Compra basada en el mayor valor entre V30D y V365 ajustado +20%.")
 
 # -------- Utilidades --------
 def _to_num(s):
@@ -98,19 +98,22 @@ try:
         tabla = tabla[tabla["V365"] > 0]
 
     # -------- NUEVA LÓGICA DE COMPRA --------
-    # BaseVenta = mayor entre V30D y V365
-    tabla["BaseVenta"] = tabla[["V30D", "V365"]].max(axis=1)
+    # V365 ajustado +20%
+    tabla["V365_ajustado"] = (tabla["V365"] * 1.20).round()
 
-    # Max = BaseVenta (entera)
-    tabla["Max"] = tabla["BaseVenta"].round().astype(int)
+    # BaseVenta = mayor entre V30D y V365_ajustado
+    tabla["BaseVenta"] = tabla[["V30D", "V365_ajustado"]].max(axis=1)
+
+    # Max = BaseVenta
+    tabla["Max"] = tabla["BaseVenta"].astype(int)
 
     # Compra = (Max - Stock), redondeada al múltiplo de 5 hacia arriba
     compra_raw = (tabla["Max"] - tabla["Stock"]).clip(lower=0)
     tabla["Compra"] = compra_raw.apply(lambda x: int(math.ceil(x/5.0)*5) if x > 0 else 0)
     # ----------------------------------------
 
-    # Salida: Compra → Stock → V30D → V365 → Max
-    cols = ["Código", "Nombre", "Compra", "Stock", "V30D", "V365", "Max"]
+    # Salida: Compra → Stock → V30D → V365 → V365_ajustado → Max
+    cols = ["Código", "Nombre", "Compra", "Stock", "V30D", "V365", "V365_ajustado", "Max"]
     if "Código EAN" in tabla.columns:
         cols.insert(1, "Código EAN")
     if mostrar_proveedor:
@@ -127,7 +130,7 @@ try:
 
     # Descarga Excel (.xlsx)
     exp = final.copy()
-    for c in ["Stock", "V365", "V30D", "Max", "Compra"]:
+    for c in ["Stock", "V365", "V365_ajustado", "V30D", "Max", "Compra"]:
         if c in exp.columns:
             exp[c] = pd.to_numeric(exp[c], errors="coerce").fillna(0).astype(int)
 
