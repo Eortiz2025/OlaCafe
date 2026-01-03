@@ -1,7 +1,7 @@
 streamlit
 pandas
-openpyxl
-lxml
-matplotlib
 numpy
+lxml
+openpyxl
 xlrd==1.2.0
+matplotlib
