@@ -1,150 +1,76 @@
 import pandas as pd
-import numpy as np
-import streamlit as st
-import io
-import re
-import math
 
-st.set_page_config(page_title="Agente de Compras", page_icon="💼", layout="wide")
-st.title("💼 Agente de Compras")
-st.caption("Compra basada en el mayor valor entre V30D y V365 ajustado +20%.")
+# Archivo (ajusta si cambia el nombre/ruta)
+PATH = r"/mnt/data/Ventas  03-01-2026-03-01-2026.xls"
 
-# -------- Utilidades --------
-def _to_num(s):
-    return pd.to_numeric(s, errors="coerce").fillna(0)
+def leer_ventas_erply_html_xls(path: str) -> pd.DataFrame:
+    # Muchos "xls" de Erply realmente son HTML con tabla
+    tables = pd.read_html(path)
+    if not tables:
+        raise ValueError("No se encontraron tablas en el archivo.")
 
-def _detect_data_start(df):
-    """Primera fila donde col1 parece código y col3 es nombre de producto."""
-    def is_code(x):
-        s = str(x).strip()
-        return bool(re.match(r"^[A-Za-z0-9\\-]+$", s)) and len(s) >= 3 and "codigo" not in s.lower()
-    for i in range(min(60, len(df))):
-        c1 = df.iloc[i, 1] if df.shape[1] > 1 else None
-        c3 = df.iloc[i, 3] if df.shape[1] > 3 else None
-        if is_code(c1) and isinstance(c3, str) and len(str(c3).strip()) > 2 and "nombre" not in str(c3).lower():
-            return i
-    return 0
+    df = tables[0].copy()
 
-def _read_erply_xls_like_html(file_obj):
-    """Lee el .xls (HTML) de Erply por posición."""
-    file_obj.seek(0)
-    df0 = pd.read_html(file_obj, header=None)[0]
-    start = _detect_data_start(df0)
-    df = df0.iloc[start:, :12].copy()
-    df.columns = [
-        "No", "Código", "Código EAN", "Nombre",
-        "Stock (total)", "Stock (apartado)", "Stock (disponible)",
-        "Proveedor",
-        "V30D", "Ventas corto ($)",
-        "V365", "Ventas 365 ($)"
+    # Aplanar encabezados multinivel (tomar el último nivel útil)
+    if isinstance(df.columns, pd.MultiIndex):
+        flat_cols = []
+        for col in df.columns:
+            name = None
+            for part in reversed(col):
+                part = "" if part is None else str(part)
+                if part and not part.startswith("Unnamed"):
+                    name = part
+                    break
+            flat_cols.append(name or str(col[-1]))
+        df.columns = flat_cols
+
+    # Quitar fila de totales (Erply suele poner "total ($)" al final)
+    for c in ["Fecha", "Moneda", "Factura de ventas", "Creador de factura"]:
+        if c in df.columns:
+            df = df[df[c].astype(str).str.lower() != "total ($)"]
+
+    # Normalizar numéricos
+    num_cols = [
+        "Ventas totales con IVA ($)",
+        "Ventas netas totales ($)",
+        "IVA 16% ($)",
+        "Cantidad vendida",
     ]
-    return df.dropna(how="all").reset_index(drop=True)
+    for c in num_cols:
+        if c in df.columns:
+            df[c] = pd.to_numeric(df[c], errors="coerce")
 
-def _norm_str(x):
-    if pd.isna(x):
-        return ""
-    return str(x).strip().lower()
+    return df
 
-MISSING_PROV_TOKENS = {"", "nan", "none", "null", "s/n", "sin proveedor", "na"}
+def resumen_por_vendedor(df: pd.DataFrame) -> pd.DataFrame:
+    vendedor_col = "Creador de factura"
+    importe_col = "Ventas totales con IVA ($)"
+    ticket_col = "Factura de ventas"
 
-# -------- Entradas --------
-archivo = st.file_uploader("🗂️ Sube el archivo exportado desde Erply (.xls)", type=["xls"])
+    missing = [c for c in [vendedor_col, importe_col, ticket_col] if c not in df.columns]
+    if missing:
+        raise ValueError(f"Faltan columnas necesarias: {missing}. Columnas encontradas: {list(df.columns)}")
 
-colf = st.columns(3)
-with colf[0]:
-    proveedor_unico = st.checkbox("Filtrar por proveedor específico", value=False)
-with colf[1]:
-    mostrar_proveedor = st.checkbox("Mostrar Proveedor en resultados", value=False)
-with colf[2]:
-    solo_stock_cero = st.checkbox("Solo Stock = 0", value=False)
-solo_con_ventas_365 = st.checkbox("Solo con ventas en 365 días (>0)", value=False)
-
-if not archivo:
-    st.info("Sube el archivo para continuar.")
-    st.stop()
-
-# -------- Proceso --------
-try:
-    tabla = _read_erply_xls_like_html(archivo)
-
-    # --- EXCLUSIÓN de descontinuados: proveedor vacío o equivalente ---
-    tabla["Proveedor_raw"] = tabla["Proveedor"]
-    tabla["Proveedor_norm"] = tabla["Proveedor_raw"].apply(_norm_str)
-    excl_mask = tabla["Proveedor_norm"].isin(MISSING_PROV_TOKENS)
-    excluidos = int(excl_mask.sum())
-    tabla = tabla.loc[~excl_mask].copy()  # excluir definitivamente
-    # ------------------------------------------------------------------
-
-    # Filtrado básico (ya sin descontinuados)
-    tabla = tabla[tabla["Proveedor"].astype(str).str.strip().ne("")]
-
-    if proveedor_unico:
-        # Catálogo de proveedores válidos (sin tokens vacíos)
-        provs = sorted(
-            p for p in tabla["Proveedor"].dropna().astype(str).str.strip().unique()
-            if _norm_str(p) not in MISSING_PROV_TOKENS
-        )
-        proveedor_sel = st.selectbox("Proveedor:", provs)
-        tabla = tabla[tabla["Proveedor"].astype(str).str.strip() == proveedor_sel]
-
-    # Tipificación
-    tabla["Stock"] = _to_num(tabla["Stock (total)"]).round()
-    tabla["V30D"]  = _to_num(tabla["V30D"]).round()
-    tabla["V365"]  = _to_num(tabla["V365"]).round()
-
-    if solo_stock_cero:
-        tabla = tabla[tabla["Stock"].eq(0)]
-    if solo_con_ventas_365:
-        tabla = tabla[tabla["V365"] > 0]
-
-    # -------- NUEVA LÓGICA DE COMPRA --------
-    # V365 ajustado +20%
-    tabla["V365_ajustado"] = (tabla["V365"] * 1.20).round()
-
-    # BaseVenta = mayor entre V30D y V365_ajustado
-    tabla["BaseVenta"] = tabla[["V30D", "V365_ajustado"]].max(axis=1)
-
-    # Max = BaseVenta
-    tabla["Max"] = tabla["BaseVenta"].astype(int)
-
-    # Compra = (Max - Stock), redondeada al múltiplo de 5 hacia arriba
-    compra_raw = (tabla["Max"] - tabla["Stock"]).clip(lower=0)
-    tabla["Compra"] = compra_raw.apply(lambda x: int(math.ceil(x/5.0)*5) if x > 0 else 0)
-    # ----------------------------------------
-
-    # Salida: Compra → Stock → V30D → V365 → V365_ajustado → Max
-    cols = ["Código", "Nombre", "Compra", "Stock", "V30D", "V365", "V365_ajustado", "Max"]
-    if "Código EAN" in tabla.columns:
-        cols.insert(1, "Código EAN")
-    if mostrar_proveedor:
-        cols.insert(3, "Proveedor")  # después de Compra
-
-    final = (tabla[tabla["Compra"] > 0]
-             .sort_values("Nombre", na_position="last"))[cols]
-
-    st.success("✅ Archivo procesado correctamente")
-    if excluidos > 0:
-        st.caption(f"🧹 Excluidos por proveedor vacío/descontinuado: {excluidos}")
-
-    st.dataframe(final, use_container_width=True, height=520)
-
-    # Descarga Excel (.xlsx)
-    exp = final.copy()
-    for c in ["Stock", "V365", "V365_ajustado", "V30D", "Max", "Compra"]:
-        if c in exp.columns:
-            exp[c] = pd.to_numeric(exp[c], errors="coerce").fillna(0).astype(int)
-
-    out_xlsx = io.BytesIO()
-    with pd.ExcelWriter(out_xlsx, engine="openpyxl") as w:
-        exp.to_excel(w, index=False, sheet_name="Compra del día")
-        w.sheets["Compra del día"].freeze_panes = "A2"
-
-    st.download_button(
-        "📄 Descargar Excel (.xlsx)",
-        data=out_xlsx.getvalue(),
-        file_name="Compra del día.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    out = (
+        df.groupby(vendedor_col, dropna=False)
+          .agg(
+              importe_con_iva=(importe_col, "sum"),
+              tickets=(ticket_col, lambda s: s.nunique()),
+          )
+          .reset_index()
+          .rename(columns={vendedor_col: "vendedor"})
+          .sort_values("importe_con_iva", ascending=False)
     )
 
-except Exception as e:
-    st.error(f"❌ Error al procesar el archivo: {e}")
+    return out
+
+if __name__ == "__main__":
+    df = leer_ventas_erply_html_xls(PATH)
+    tabla = resumen_por_vendedor(df)
+
+    # Mostrar
+    print(tabla.to_string(index=False))
+
+    # Guardar (opcional)
+    tabla.to_excel("/mnt/data/resumen_vendedores_03-01-2026.xlsx", index=False)
+    tabla.to_csv("/mnt/data/resumen_vendedores_03-01-2026.csv", index=False, encoding="utf-8-sig")
