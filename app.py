@@ -2,12 +2,11 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
-import hashlib
 
 st.set_page_config(page_title="Ventas por vendedor", layout="wide")
 
-# --------- Lectura del .xls (Erply suele exportar HTML con extensión .xls) ---------
-def leer_ventas_erply_desde_bytes(file_bytes: bytes) -> pd.DataFrame:
+def leer_ventas_erply(file_bytes: bytes) -> pd.DataFrame:
+    # Erply .xls suele ser HTML -> read_html
     tables = pd.read_html(BytesIO(file_bytes))
     if not tables:
         raise ValueError("No se encontraron tablas en el archivo.")
@@ -26,12 +25,12 @@ def leer_ventas_erply_desde_bytes(file_bytes: bytes) -> pd.DataFrame:
             flat_cols.append(name or str(col[-1]))
         df.columns = flat_cols
 
-    # Quitar fila total si existe (Erply suele poner "total ($)")
+    # Quitar fila total si existe
     for c in ["Fecha", "Moneda", "Factura de ventas", "Creador de factura"]:
         if c in df.columns:
             df = df[df[c].astype(str).str.lower() != "total ($)"]
 
-    # Normalizar numéricos (por si vienen como texto)
+    # Normalizar numéricos
     for c in ["Ventas totales con IVA ($)", "Ventas netas totales ($)", "IVA 16% ($)", "Cantidad vendida"]:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
@@ -46,9 +45,8 @@ def resumen_por_vendedor(df: pd.DataFrame) -> pd.DataFrame:
     faltan = [c for c in [vendedor_col, importe_col, ticket_col] if c not in df.columns]
     if faltan:
         raise ValueError(
-            "No coinciden las columnas del archivo.\n"
-            f"Faltan: {faltan}\n"
-            f"Encontradas: {list(df.columns)}"
+            f"El archivo no trae las columnas esperadas: {faltan}\n"
+            f"Columnas encontradas: {list(df.columns)}"
         )
 
     out = (
@@ -62,52 +60,35 @@ def resumen_por_vendedor(df: pd.DataFrame) -> pd.DataFrame:
           .sort_values("importe_con_iva", ascending=False)
     )
 
-    # Formato amigable
     out["importe_con_iva"] = out["importe_con_iva"].fillna(0).round(2)
     out["tickets"] = out["tickets"].fillna(0).astype(int)
-
     return out
 
 # ---------------- UI ----------------
-st.title("Ventas por vendedor (Importe con IVA + Tickets del día)")
+st.title("Ventas por vendedor (Importe con IVA + Tickets)")
 
 c1, c2, c3 = st.columns([2, 1, 1])
 with c1:
-    up = st.file_uploader("Sube el archivo de Erply (.xls)", type=["xls", "html"])
+    up = st.file_uploader("Sube el archivo de ventas (.xls de Erply)", type=["xls", "html"])
 with c2:
-    if st.button("Limpiar caché"):
-        st.cache_data.clear()
-        st.cache_resource.clear()
-        st.rerun()
-with c3:
     if st.button("Actualizar"):
         st.rerun()
-
-st.divider()
+with c3:
+    if st.button("Reset (limpiar todo)"):
+        st.session_state.clear()
+        st.rerun()
 
 if up is None:
-    st.info("Sube el archivo para generar el resumen.")
+    st.info("Sube el archivo para ver el resumen.")
     st.stop()
 
-# Esto garantiza refresco real: si el archivo cambia, cambian bytes y la huella.
+# Leer SIEMPRE desde bytes (esto evita el “no se refresca”)
 file_bytes = up.getvalue()
-md5 = hashlib.md5(file_bytes).hexdigest()
 
-with st.expander("Diagnóstico (para confirmar que sí cambió el archivo)", expanded=False):
-    st.write("Nombre:", up.name)
-    st.write("Tamaño (bytes):", len(file_bytes))
-    st.write("MD5:", md5)
+df = leer_ventas_erply(file_bytes)
+tabla = resumen_por_vendedor(df)
 
-# Procesar
-try:
-    df = leer_ventas_erply_desde_bytes(file_bytes)
-    tabla = resumen_por_vendedor(df)
-except Exception as e:
-    st.error(str(e))
-    st.stop()
-
-# Mostrar
-st.subheader("Resumen por vendedor")
+st.subheader("Resumen")
 st.dataframe(tabla, use_container_width=True)
 
 # Descargas
@@ -115,26 +96,15 @@ csv_data = tabla.to_csv(index=False).encode("utf-8-sig")
 xlsx_buffer = BytesIO()
 with pd.ExcelWriter(xlsx_buffer, engine="openpyxl") as writer:
     tabla.to_excel(writer, index=False, sheet_name="Resumen")
-xlsx_bytes = xlsx_buffer.getvalue()
+xlsx_data = xlsx_buffer.getvalue()
 
 d1, d2 = st.columns(2)
 with d1:
-    st.download_button(
-        "Descargar CSV",
-        data=csv_data,
-        file_name="resumen_vendedores.csv",
-        mime="text/csv",
-        key=f"csv_{md5}",
-    )
+    st.download_button("Descargar CSV", data=csv_data, file_name="resumen_vendedores.csv", mime="text/csv")
 with d2:
     st.download_button(
         "Descargar Excel",
-        data=xlsx_bytes,
+        data=xlsx_data,
         file_name="resumen_vendedores.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        key=f"xlsx_{md5}",
     )
-
-# Vista rápida opcional
-with st.expander("Ver datos crudos (primeras 20 filas)", expanded=False):
-    st.dataframe(df.head(20), use_container_width=True)
